@@ -24,6 +24,7 @@ var xmlreader = require('xmlreader'),
     Feature = require('./model/yang/feature.js'),
     Uses = require('./model/yang/uses.js'),
     Module = require('./model/yang/module.js'),
+    Package = require('./model/yang/package.js'),
     Type = require('./model/yang/type.js'),
     RPC = require('./model/yang/rpc.js'),
     OpenModelPandr = require('./model/OpenModelPandr.js'),
@@ -54,7 +55,7 @@ var yangModule = [];//The array of yang files name
 var keylist = [];
 //var keyId = [];//The array of key
 var isInstantiated = [];//The array of case that the class is composited by the other class
-var fileName = [];
+var packages = [];
 var currentFileName;
 var supplierFileName = "source.uml";
 var clientFileName = "target.uml";
@@ -65,6 +66,10 @@ var splitClassId = [];
 var copyAssociationId = [];
 var supplierId = "";
 var clientId = "";
+var config = {};
+var merges = [];
+var use = [];
+var file = [];
 
 var result = main_Entrance();
 
@@ -81,34 +86,35 @@ function main_Entrance(){
                 } else{
                     var fileNum = 0;
                     var clientFileFlag = 0;
+                    if(fs.existsSync("./project/config.txt")){
+                        readConfig();
+                    }else{
+                        console.warn("Warning: There is no config.txt in the project folder.Please recheck you files.");
+                        throw (e);
+                    }
                     if(fs.existsSync("./project/CopyAndSplit.txt")){
                         readCopyAndSplit();
                     }
-                    for(var j = 0; j < files.length; j++) {
-                        if(files[j].toLowerCase() == supplierFileName.toLowerCase()){
-                            supplierFileName = files[j];
-                            currentFileName = files[j];
+                    for(var i = 0; i < files.length; i++) {
+                        var allowedFileExtensions = ['xml', 'uml'];
+                        var currentFileExtension = files[i].split('.').pop();
+                        if(allowedFileExtensions.indexOf(currentFileExtension) !== -1 && files[i] != "mapping.uml" && files[i] != clientFileName) {   //match postfix of files
+                            currentFileName = files[i];
                             fileNum++;
-                            parseModule(files[j]);
-                        }
-                        if(files[j].toLowerCase() == clientFileName.toLowerCase()){
-                            currentFileName = files[j];
-                            fileNum++;
-                            //console.log("Client file already exists! We don't need copy.");
-                            copyClass();
-                            splitClass();
-                            parseModule(files[j]);
-                            clientFileFlag = 1;
+                            if(currentFileName != supplierFileName){
+                                file.push(currentFileName);
+                            }
+                            parseModule(files[i]);
                         }
                     }
-                    if(clientFileFlag == 0){          //If target do not exist, clone source file.
-                        currentFileName = clientFileName;
-                        clone();
-                        copyClass();
-                        splitClass();
-                        parseModule(clientFileName);
-                        fileNum++;
-                    }
+                    currentFileName = clientFileName;
+                    clone();
+                    merge();
+                    copyClass();
+                    splitClass();
+                    parseModule(clientFileName);
+                    fileNum++;
+
                     currentFileName = undefined;
                     //read
                     if(fileNum){
@@ -185,9 +191,8 @@ function main_Entrance(){
                                 (function () {
                                     try {
                                         var st = writeYang(yangModule[i]);//print the module to yang file
-                                        // var path = './project/' + yangModule[i].name.split("-")[0] + '/' + yangModule[i].name + '.yang';
-                                        var path = './project/' + yangModule[i].fileName.split('.')[0] + "_" + yangModule[i].name +  '.yang';
-                                        fs.writeFile(path, st,function(error){
+                                        var path = './project/' + yangModule[i].name +  '.yang';
+                                        fs.writeFile(path, st, function(error){
                                             if(error){
                                                 console.log(error.stack);
                                                 throw(error.message);
@@ -197,7 +202,7 @@ function main_Entrance(){
                                         console.log(e.stack);
                                         throw(e.message);
                                     }
-                                    console.log("write "+yangModule[i].name);
+                                    console.log("write " + yangModule[i].name + ".yang successfully!");
                                 })();
                             }
                         }*/
@@ -215,6 +220,106 @@ function main_Entrance(){
         console.log(e.stack);
         throw e.message;
     }
+}
+
+function readConfig(){
+    var data = fs.readFileSync("./project/config.txt", {encoding: 'utf8'});
+    try{
+        if(data){
+            data = data.substring(data.indexOf("{\""));
+            data = data.replace(/",\r?\n*/g, "\",");
+            data = data.replace(/],\r?\n*/g, "],");
+            data = data.replace(/},\r?\n*/g, "},");
+            data = data.replace(/\r?\n/g, "<br>");
+            data = data.replace(/(<br>)*$/g, "");
+            config = JSON.parse(data);
+            for(var key in config){
+                if(typeof config[key] == "string"){
+                    config[key] = config[key].replace(/<br>/g, "\r\n");
+                }else if(typeof config[key] == "object"){
+                    for(var keykey in config[key]){
+                        if(typeof config[key][keykey] == "string"){
+                            config[key][keykey] = config[key][keykey].replace(/<br>/g, "\r\n");
+                        }
+                    }
+                }
+
+            }
+            var reg = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+            var date = config.revision.date;
+            try{
+                if(date){
+                    var dateArray = date.split("-");
+                    var day = [0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+                    for(var i = 0; i < dateArray.length; i++){
+                        dateArray[i] = parseInt(dateArray[i]);
+                    }
+                    if(date.match(reg) == null){
+                        console.warn("The revision date is not in the correct format (yyyy-mm-dd), please check the config.txt file.");
+                        throw (e1);
+                    }
+                    if(dateArray[1] > 12 || dateArray[1] < 1){
+                        console.warn("The month of revision date is invalid, please check the config.txt file.");
+                        throw (e1);
+                    }
+                    if(dateArray[2] > day[dateArray[1]] || dateArray[2] < 1) {
+                        if (!(dateArray[0] % 4 == 0 && dateArray[1] == 2 && dateArray[2] == 29)) {
+                            console.warn("The revision date is invalid, day is not consistent with month. Please check the config.txt file")
+                            throw (e1);
+                        }
+                    }
+                }else{
+                    Date.prototype.Format = function (fmt) {
+                        var o = {
+                            "M+": this.getMonth() + 1,
+                            "d+": this.getDate(),
+                            "h+": this.getHours(),
+                            "m+": this.getMinutes(),
+                            "s+": this.getSeconds(),
+                            "q+": Math.floor((this.getMonth() + 3) / 3),
+                            "S": this.getMilliseconds()
+                        };
+                        if (/(y+)/.test(fmt)) fmt = fmt.replace(RegExp.$1, (this.getFullYear() + "").substr(4 - RegExp.$1.length));
+                        for (var k in o)
+                            if (new RegExp("(" + k + ")").test(fmt)) fmt = fmt.replace(RegExp.$1, (RegExp.$1.length == 1) ? (o[k]) : (("00" + o[k]).substr(("" + o[k]).length)));
+                        return fmt;
+                    }
+                    var currentData = new Date().Format("yyyy-MM-dd");
+                    config.revision.date = currentData;
+                }
+                /*if(!date){
+                 }
+                 else if(dateArray[1] < 13 && dateArray[2] > day[dateArray[1]]){
+                 if(!(dateArray[0] % 4 == 0 && dateArray[1] == 2 && dateArray[2] == 29)){
+                 console.warn("The revision date is invalid, the month is not consistent with data. Please check the config.txt file.")
+                 throw (e1);
+                 }
+                 /!*if(parseInt(date.split("-")[0]) > parseInt(currentData.split("-")[0])){
+                 console.warn("The revision date is invalid (later than current date or wrong number), please check the config.txt file.")
+                 throw (e1);
+                 }else if(parseInt(date.split("-")[0]) == parseInt(currentData.split("-")[0]) && parseInt(date.split("-")[1]) > parseInt(currentData.split("-")[1])){
+                 console.warn("The revision date is invalid (later than current date or wrong number), please check the config.txt file.")
+                 throw (e1);
+                 }else if(parseInt(date.split("-")[0]) == parseInt(currentData.split("-")[0]) && parseInt(date.split("-")[1]) == parseInt(currentData.split("-")[1]) && parseInt(date.split("-")[2]) > parseInt(currentData.split("-")[2])){
+                 console.warn("The revision date is invalid (later than current date or wrong number), please check the config.txt file.")
+                 throw (e1);
+                 }*!/
+                 }*/
+            }catch(e1){
+                //console.warn("There are something wrong in config.txt file. Please recheck the date you write in your file.");
+                throw (e1.message);
+            }
+
+            console.log("config.txt read successfully!");
+        }else{
+            console.warn('There is no \'config.txt\'. Please recheck your files according to the guideline!');
+        }
+    }catch (e){
+        console.log(e.stack);
+        throw (e.message);
+    }/*catch (e1){
+     console.log("The date has not arrived, please check config.txt file!");
+     }*/
 }
 
 function readCopyAndSplit(){
@@ -322,6 +427,150 @@ function clone(){
         console.log(e.stack);
         throw (e.message);
     }
+}
+
+function merge(){
+    var data = fs.readFileSync("./project/" + clientFileName, {encoding: 'utf8'});
+    try{
+        for(var i = 0; i < merges.length; i++){
+            if(merges[i].fileName == supplierFileName && merges[i].mergeInto == ""){
+                var reg = new RegExp('\\s+<packagedElement xmi:type="uml:Class" xmi:id="' + merges[i].id + '"[\\s\\S]*?</packagedElement>');
+                if(data.match(reg) == null){
+                    console.warn("Warning: There is no class xmi:id= \"" + merges[i].id + "\" in " + clientFileName + ". Please recheck your input file!")
+                    throw (e);
+                }
+                var startIndex = data.indexOf(data.match(reg)[0]);
+                var endIndex = data.indexOf("</packagedElement>", startIndex) + "</packagedElement>".length;
+                var classData = data.substring(startIndex, endIndex);
+                var attStartIndex = 0;
+                var attEndIndex = -1;
+                var attributeData = "";
+                while(classData.match(new RegExp("\\s+<ownedAttribute")) != null){
+                    if(classData.indexOf(classData.match(new RegExp("\\s+<ownedAttribute"))[0], attStartIndex) == -1)
+                        break;
+                    attStartIndex = classData.indexOf(classData.match(new RegExp("\\s+<ownedAttribute"))[0], attStartIndex);
+                    if(classData.indexOf("/>", attStartIndex) < classData.indexOf("\r\n", attStartIndex + 1)){
+                        attEndIndex = classData.indexOf("/>", attStartIndex) + 2;
+                    }else{
+                        attEndIndex = classData.indexOf("</ownedAttribute>", attStartIndex) + "</ownedAttribute>".length;
+                    }
+                    attributeData += classData.substring(attStartIndex, attEndIndex);
+                    classData = classData.substring(0, attStartIndex) + classData.substring(attEndIndex);
+                }
+                attributeData += "\r\n/>";   //avoid indexOf() = -1
+                var matchData = "";
+                for(var j = 0; j < merges[i].childrenId.length; j++){
+                    var reg = new RegExp('\\s+<ownedAttribute xmi:type="uml:Property" xmi:id="' + merges[i].childrenId[j]);
+                    if(attributeData.match(reg) == null){
+                        console.warn("Warning: There is no attribute xmi:id= \"" + merges[i].childrenId[j] + "\" in " + clientFileName + ". Please recheck your input file!")
+                        throw (e);
+                    }
+                    var matchStartIndex = attributeData.indexOf(attributeData.match(reg)[0]);
+                    var matchEndIndex = -1;
+                    if(attributeData.indexOf("/>", matchStartIndex) < attributeData.indexOf("\r\n", matchStartIndex + 1)){
+                        matchEndIndex = attributeData.indexOf("/>", matchStartIndex) + 2;
+                    }else{
+                        matchEndIndex = attributeData.indexOf("</ownedAttribute>", matchStartIndex) + "</ownedAttribute>".length;
+                    }
+                    matchData += attributeData.substring(matchStartIndex, matchEndIndex);
+                }
+                var insertIndex = classData.indexOf(classData.match(new RegExp('\\s+</packagedElement>')));
+                classData = classData.substring(0, insertIndex) + matchData + classData.substring(insertIndex);
+                data = data.substring(0, startIndex) + classData + data.substring(endIndex);
+            }
+        }
+    }catch (e){
+        console.log(e.stack);
+        throw (e.message);
+    }
+    try{
+        for(var i = 0; i < file.length; i++){
+            // source data is the file you will get information. Not supplier file , not client file.
+            var sourceData = fs.readFileSync("./project/" + file[i], {encoding: 'utf8'});
+            for(var j = 0; j < merges.length; j++){
+                if(file[i] == merges[j].fileName){
+                    var insertData = "";
+                    for(var k = 0; k < merges[j].childrenId.length; k++){
+                        var reg = new RegExp('\\s+<ownedAttribute xmi:type="uml:Property" xmi:id="' + merges[j].childrenId[k]);
+                        if(sourceData.match(reg) == null){
+                            console.warn("Warning: There is no attribute xmi:id= \"" + merges[j].childrenId[k] + "\" in " + file[i] + ". Please recheck your input file!")
+                            throw (e);
+                        }
+                        var startIndex = sourceData.indexOf(sourceData.match(reg)[0]);
+                        var endIndex = -1;
+                        if(sourceData.indexOf("/>", startIndex) < sourceData.indexOf("\r\n", startIndex + 1)){
+                            endIndex = sourceData.indexOf("/>", startIndex) + 2;
+                        }else{
+                            endIndex = sourceData.indexOf("</ownedAttribute>", startIndex) + "</ownedAttribute>".length;
+                        }
+                        insertData += sourceData.substring(startIndex, endIndex);
+                    }
+                    var reg = new RegExp('xmi:id="[\\w-.]+');
+                    var matchData = insertData.match(reg);
+                    for(var k = 0; k < matchData.length; k++){
+                        insertData = insertData.replace(matchData[k], matchData[k] + "_Mg" + (i + 1));
+                    }
+                    var reg = new RegExp('name="[\\w-.]+');
+                    var matchData = insertData.match(reg);
+                    for(var k = 0; k < matchData.length; k++){
+                        insertData = insertData.replace(matchData[k], matchData[k] + "_Mg" + (i + 1));
+                    }
+                    //var reg = new RegExp('\\s+<packagedElement xmi:type="uml:Class" xmi:id="' + merges[j].id);
+                    var reg = new RegExp('\\s+<packagedElement xmi:type="uml:Class" xmi:id="[\\w-.]+" name="' + merges[j].mergeInto);
+                    var matchData = data.match(reg)[0];
+                    var insertIndex = data.indexOf(matchData);
+                    insertIndex = data.indexOf("</packagedElement>", insertIndex);
+                    insertIndex = data.lastIndexOf("\r\n", insertIndex);
+
+                    //Adjust the indentation
+                    var indent1 = insertData.indexOf("<") - 2;
+                    var indent2 = matchData.indexOf("<");       //indent of class - "\r\n".length + 2
+                    if(indent1 != indent2){
+                        var minus = Math.abs(indent1 - indent2);
+                        var PRE = "";
+                        while(minus--){
+                            PRE += " ";
+                        }
+                        if(indent1 > indent2){
+                            insertData = insertData.replace(new RegExp("\r\n" + PRE,"g"), "\r\n");
+                        }else{
+                            insertData = insertData.replace(/\r\n/g, "\r\n" + PRE);
+
+                        }
+                    }
+
+
+
+
+
+
+                    data = data.substring(0, insertIndex) + insertData + data.substring(insertIndex);
+                }
+            }
+        }
+        var indexUmlEnd;
+        if(data.indexOf("</uml:Package>") != -1){
+            indexUmlEnd = data.indexOf("</uml:Package>") + "</uml:Package>".length;
+        }else if(data.indexOf("</uml:Model>") != -1){
+            indexUmlEnd = data.indexOf("</uml:Model>") + "</uml:Model>".length;
+        }else{
+            console.warn("Warning :Can not find the tag 'uml:Package' or 'uml:Model' of" + clientFileName + "! Please check out the xml file")
+        }
+        var openModelProfileData = data.substring(indexUmlEnd);         //openModel_Profile part
+        var lineDataArray = openModelProfileData.split("\r\n");
+        for(var i = 0; i < lineDataArray.length;){
+            if(lineDataArray[i].indexOf("PRStereotypes") != -1){
+                lineDataArray.splice(i, 1);
+            }else{
+                i++;
+            }
+        }
+        data = data.replace(openModelProfileData, lineDataArray.join("\r\n"));
+    }catch (e){
+        console.log(e.stack);
+        throw (e.message);
+    }
+    fs.writeFileSync("./project/" + clientFileName, data);
 }
 
 function copyClass(){
@@ -1286,13 +1535,13 @@ function createKey(cb){
     cb(true);
 }
 
-function parseModule(filename){                     //XMLREADER read xml files
-    var xml = fs.readFileSync("./project/" + filename, {encoding: 'utf8'});
+function parseModule(fileName){                     //XMLREADER read xml files
+    var xml = fs.readFileSync("./project/" + fileName, {encoding: 'utf8'});
     xmlreader.read(xml, function(error, model) {
         if (error) {
-            console.log('There was a problem reading data from ' + filename + '. Please check your xmlreader module and nodejs!\t\n' + error.stack);
+            console.log('There was a problem reading data from ' + fileName + '. Please check your xmlreader module and nodejs!\t\n' + error.stack);
         } else {
-            console.log(filename + " read successfully!");
+            console.log(fileName + " read successfully!");
             var xmi;
             var flag = 0;
             var newxmi;
@@ -1300,8 +1549,8 @@ function parseModule(filename){                     //XMLREADER read xml files
                 xmi = model["xmi:XMI"] ;            //xmi:the content of xmi:XMI object in model
                 var obj;
                 for(var key in xmi){                            //key:the child node of xmi
-                    switch(key.toLowerCase()){
-                        case "OpenModel_Profile:OpenModelAttribute".toLowerCase():
+                    switch(key.split(":")[1]){
+                        case "OpenModelAttribute":
                             newxmi = xmi[key].array ? xmi[key].array : xmi[key];      //newxmi: the array in OpenModel_Profile:OpenModelAttribute
                             var len = xmi[key].array ? xmi[key].array.length : 1;     //OpenModel_Profile:the number of array object in OpenModelAttribute
                             for(var i = 0; i < len; i++){
@@ -1309,7 +1558,7 @@ function parseModule(filename){                     //XMLREADER read xml files
                                 parseOpenModelatt(obj);
                             }
                             break;
-                        case "OpenModel_Profile:OpenModelClass".toLowerCase():
+                        case "OpenModelClass":
                             newxmi = xmi[key].array ? xmi[key].array : xmi[key];
                             var len = xmi[key].array ? xmi[key].array.length : 1;
                             for(var i = 0; i < len; i++){
@@ -1317,7 +1566,7 @@ function parseModule(filename){                     //XMLREADER read xml files
                                 parseOpenModelclass(obj);
                             }
                             break;
-                        case "OpenModel_Profile:OpenModelParameter".toLowerCase():
+                        case "OpenModelParameter":
                             newxmi = xmi[key].array ? xmi[key].array : xmi[key];
                             var len = xmi[key].array ? xmi[key].array.length : 1;
                             for(var i = 0; i < len; i++){
@@ -1325,7 +1574,7 @@ function parseModule(filename){                     //XMLREADER read xml files
                                 parseOpenModelatt(obj);
                             }
                             break;
-                        case "OpenModel_Profile:Preliminary".toLowerCase():
+                        case "Preliminary":
                             newxmi = xmi[key].array ? xmi[key].array : xmi[key];
                             var len = xmi[key].array ? xmi[key].array.length : 1;
                             for(var i = 0; i < len; i++){
@@ -1335,8 +1584,7 @@ function parseModule(filename){                     //XMLREADER read xml files
 
                             }
                             break;
-
-                        case "OpenModel_Profile:Mature".toLowerCase():
+                        case "Mature":
                             newxmi = xmi[key].array ? xmi[key].array : xmi[key];
                             var len = xmi[key].array ? xmi[key].array.length : 1;
                             for(var i = 0; i < len; i++){
@@ -1344,7 +1592,7 @@ function parseModule(filename){                     //XMLREADER read xml files
                                 createLifecycle(obj, "current");
                             }
                             break;
-                        case "OpenModel_Profile:Obsolete".toLowerCase():
+                        case "Obsolete":
                             newxmi = xmi[key].array ? xmi[key].array : xmi[key];
                             var len = xmi[key].array ? xmi[key].array.length : 1;
                             for(var i = 0; i < len; i++){
@@ -1352,7 +1600,7 @@ function parseModule(filename){                     //XMLREADER read xml files
                                 createLifecycle(obj, "obsolete");
                             }
                             break;
-                        case "OpenModel_Profile:Deprecated".toLowerCase():
+                        case "Deprecated":
                             newxmi = xmi[key].array ? xmi[key].array : xmi[key];
                             var len = xmi[key].array ? xmi[key].array.length : 1;
                             for(var i = 0; i < len; i++){
@@ -1360,7 +1608,7 @@ function parseModule(filename){                     //XMLREADER read xml files
                                 createLifecycle(obj, "deprecated");
                             }
                             break;
-                        case "OpenModel_Profile:Experimental".toLowerCase():
+                        case "Experimental":
                             newxmi = xmi[key].array ? xmi[key].array : xmi[key];
                             var len = xmi[key].array ? xmi[key].array.length : 1;
                             for(var i = 0; i < len; i++){
@@ -1369,7 +1617,7 @@ function parseModule(filename){                     //XMLREADER read xml files
                                 createLifecycle(obj, "Experimental");
                             }
                             break;
-                        case "OpenModel_Profile:Example".toLowerCase():
+                        case "Example":
                             newxmi = xmi[key].array ? xmi[key].array : xmi[key];
                             var len = xmi[key].array ? xmi[key].array.length : 1;
                             for(var i = 0; i < len; i++){
@@ -1377,7 +1625,7 @@ function parseModule(filename){                     //XMLREADER read xml files
                                 createLifecycle(obj, "Example");
                             }
                             break;
-                        case "OpenModel_Profile:LikelyToChange".toLowerCase():
+                        case "LikelyToChange":
                             newxmi = xmi[key].array ? xmi[key].array : xmi[key];
                             var len = xmi[key].array ? xmi[key].array.length : 1;
                             for(var i = 0; i < len; i++){
@@ -1386,8 +1634,7 @@ function parseModule(filename){                     //XMLREADER read xml files
                                 createLifecycle(obj, "LikelyToChange");
                             }
                             break;
-
-                        case "OpenModel_Profile:PassedByReference".toLowerCase():
+                        case "PassedByReference":
                             newxmi = xmi[key].array ? xmi[key].array : xmi[key];
                             var len = xmi[key].array ? xmi[key].array.length : 1;
                             for(var i = 0; i < len; i++){
@@ -1400,7 +1647,7 @@ function parseModule(filename){                     //XMLREADER read xml files
                                 parseOpenModelatt(obj);
                             }
                             break;
-                        case "OpenModel_Profile:PruneAndRefactor".toLowerCase():
+                        case "PruneAndRefactor":
                             newxmi = xmi[key].array ? xmi[key].array : xmi[key];
                             len = xmi[key].array ? xmi[key].array.length : 1;
                             for(var i= 0; i < len; i++){
@@ -1408,6 +1655,23 @@ function parseModule(filename){                     //XMLREADER read xml files
                                 parseOpenModelpandr(obj);
                             }
                             break;
+                        case "Merge":
+                            newxmi = xmi[key].array ? xmi[key].array : xmi[key];
+                            len = xmi[key].array ? xmi[key].array.length : 1;
+                            for(var i= 0; i < len; i++){
+                                len == 1 ? obj = newxmi : obj = newxmi[i];
+                                parseMerge(obj);
+                            }
+                            break;
+                        case "Use":
+                            newxmi = xmi[key].array ? xmi[key].array : xmi[key];
+                            len = xmi[key].array ? xmi[key].array.length : 1;
+                            for(var i= 0; i < len; i++){
+                                len == 1 ? obj = newxmi : obj = newxmi[i];
+                                parseUse(obj);
+                            }
+                            break;
+
                         default :break;
                     }
                 }
@@ -1445,7 +1709,7 @@ function parseModule(filename){                     //XMLREADER read xml files
                     console.log("empty file!");
                 }
             }
-            console.log("Parse " + filename + " successfully!");
+            console.log("Parse " + fileName + " successfully!");
             return;
         }
     });
@@ -1453,25 +1717,109 @@ function parseModule(filename){                     //XMLREADER read xml files
 
 function parseUmlModel(xmi){                    //parse umlmodel
     var mainmod;
-    /* var path="./project/"+mainmod;
-     if (fs.existsSync(path)){
-     console.log('This directory '+path+" has been created! ");
-     } else {
-     fs.mkdirSync(path);//create this directory
-     }*/
+    var comment = "";
     xmi.attributes().name ? mainmod = xmi.attributes().name : console.error("ERROR:The attribute 'name' of tag 'xmi:id=" + xmi.attributes()["xmi:id"] + "' in " + filename + " is empty!");
-    mainmod = mainmod.replace(/^[^A-Za-z]+|[^A-Za-z\d]+$/g, "");   //remove the special character in the end
-    mainmod = mainmod.replace(/[^\w]+/g, '_');                     //not "A-Za-z0-9"->"_"
+    mainmod = mainmod.replace(/^[^A-Za-z0-9]+|[^A-Za-z0-9\d]+$/g, "");   //remove the special character in the end
+    mainmod = mainmod.replace(/[^\w\.-]+/g, '_');                     //not "A-Za-z0-9"->"_"
     modName.push(mainmod);
-    var m = new Module(modName.join("-"), "", "", modName.join("-"), "", "", "", "", currentFileName);
+    if (xmi["ownedComment"]) {
+        comment = parseComment(xmi);
+        /*if(xmi['ownedComment'].array){
+            //comment += xmi['ownedComment'].array[0].body.text();
+            for(var j = 0; j < xmi['ownedComment'].array.length; j++){
+                if(xmi['ownedComment'].array[j].body.hasOwnProperty("text")){
+                    comment += xmi['ownedComment'].array[j].body.text() + "\r\n";
+                }
+            }
+            comment = comment.replace(/\r\n$/g, "");
+        }else if(xmi['ownedComment'].body){
+            comment = xmi['ownedComment'].body.text();
+        }*/
+    }
+    //var namespace = "urn:onf:params:xml:ns:yang:" + modName.join("-");
+    var namespace = "";
+    namespace = config.namespace + modName.join("-");
+    var prefix;
+    if(config.prefix == "" || config.prefix == null){
+        prefix = modName.join("-");
+    }else{
+        prefix = config.prefix;
+    }
+    var m = new Module(modName.join("-"), namespace, "", prefix, config.organization, config.contact, config.revision, comment, currentFileName);
+    modName.pop();
+    //createElement(xmi);//create object class
+    var newxmi;
+    var len;
+    if(xmi.packagedElement){
+        xmi.packagedElement.array ? len = xmi.packagedElement.array.length : len = 1;
+    }
+    for(var i = 0; i < len; i++){
+        len == 1 ? newxmi =xmi.packagedElement : newxmi = xmi.packagedElement.array[i];
+        if(newxmi.attributes().name == "Imports"){
+            var impLen;
+            var impObj;
+            var imp;
+            newxmi.packageImport.array ? impLen = newxmi.packageImport.array.length : impLen = 1;
+            for(var j = 0; j < impLen; j++){
+                impLen == 1 ? impObj = newxmi.packageImport : impObj = newxmi.packageImport.array[j];
+                imp = impObj.importedPackage.attributes().href.split('/').pop().split('.')[0];
+                m.import.push(imp);
+            }
+            //m.import.push(newxmi.packageImport.importedPackage.attributes().href);
+        }
+        parsePackage(newxmi);
+
+    }
     yangModule.push(m);
-    if(currentFileName == supplierFileName){
-        supplierId = xmi.attributes()["xmi:id"];
+    modName.pop();
+}
+
+function parsePackage(xmi){
+    var len;
+    var newxmi;
+    var mainmod;
+    var id = xmi.attributes()["xmi:id"];
+    var comment = "";
+    if(xmi.attributes()["xmi:type"] == "uml:Package" || xmi.attributes()["xmi:type"] == "uml:Interface") {
+        xmi.attributes().name?mainmod=xmi.attributes().name:console.error("ERROR:The attribute 'name' of tag 'xmi:id=" + xmi.attributes()["xmi:id"] + "' in " + filename + " is empty!");
+        mainmod=mainmod.replace(/^[^A-Za-z0-9]+|[^A-Za-z0-9\d]+$/g, "");   //remove the special character in the end
+        mainmod=mainmod.replace(/[^\w\.-]+/g, '_');                     //not "A-Za-z0-9"->"_"
+        if (xmi["ownedComment"]) {
+            comment = parseComment(xmi);
+            /*if(xmi['ownedComment'].array){
+                comment += xmi['ownedComment'].array[0].body.text();
+                for(var j = 1; j<xmi['ownedComment'].array.length; j++){
+                    if(xmi['ownedComment'].array[j].body.hasOwnProperty("text")){
+                        comment += "\r\n" + xmi['ownedComment'].array[j].body.text();
+                    }
+                }
+            }else if(xmi['ownedComment'].body){
+                comment = xmi['ownedComment'].body.text();
+            }*/
+        }
+        var temp = new Package(mainmod, id, modName.join("-"), comment, currentFileName);
+        packages.push(temp);
+        modName.push(mainmod);
+
+        if(xmi.packagedElement){
+            xmi.packagedElement.array ? len = xmi.packagedElement.array.length : len = 1;
+        }
+        for(var i = 0; i < len; i++){
+            len == 1 ? newxmi = xmi.packagedElement : newxmi = xmi.packagedElement.array[i];
+            parsePackage(newxmi);
+        }
+        modName.pop();
+        if(xmi.attributes()["xmi:type"] == "uml:Interface"){
+            xmi.ownedOperation.array ? len = xmi.ownedOperation.array.length : len = 1;
+            for(var i = 0; i < len; i++){
+                len == 1 ? newxmi = xmi.ownedOperation : newxmi = xmi.ownedOperation.array[i];
+                createClass(newxmi, "rpc");
+            }
+        }
+
+    }else{
+        createElement(xmi);
     }
-    if(currentFileName == clientFileName){
-        clientId = xmi.attributes()["xmi:id"];
-    }
-    createElement(xmi);//create object class
 }
 
 function parseOpenModelatt(xmi){
@@ -1501,7 +1849,9 @@ function parseOpenModelatt(xmi){
         flag = 1;
     }
     var vr;
-    if(xmi.attributes()["valueRange"] && xmi.attributes()["valueRange"] != "NA" && xmi.attributes()["valueRange"] != "See data type"){
+    //if(xmi.attributes()["valueRange"]&&xmi.attributes()["valueRange"]!="NA"&&xmi.attributes()["valueRange"]!="See data type"){
+    if(xmi.attributes()["valueRange"] && xmi.attributes()["valueRange"] != "null" && xmi.attributes()["valueRange"] != "NA" && xmi.attributes()["valueRange"] != "See data type" && xmi.attributes()["valueRange"] != "See data type."){
+
         vr = xmi.attributes()["valueRange"];
         flag = 1;
     }
@@ -1666,33 +2016,34 @@ function createLifecycle(xmi,str){              //创建lifecycle
 }
 
 function createElement(xmi){
-    for(var key in xmi){
-        if(typeof xmi[key] == "object"){
-            var ele = xmi[key];
+    //for(var key in xmi){
+        //if(typeof xmi[key]=="object"){
+        if(typeof xmi == "object"){
+            var ele = xmi;
             var len;                    //ele is the length of xmi[key]
             var obj;
-            xmi[key].array ? len = xmi[key].array.length : len = 1;
+            //xmi[key].array?len=xmi[key].array.length:len=1;
+            xmi.array ? len = xmi.array.length : len = 1;
             for (var i = 0; i < len; i++) {
                 len == 1 ? obj = ele : obj = ele.array[i];
-                if (obj.attributes()["xmi:type"] == "uml:Package" || obj.attributes()["xmi:type"] == "uml:Interface") {
+                /*if (obj.attributes()["xmi:type"] == "uml:Package"||obj.attributes()["xmi:type"]=="uml:Interface") {
                     var name;
-                    obj.attributes().name ? name = obj.attributes().name : console.error("ERROR:The attribute 'name' of tag 'xmi:id=" + obj.attributes()["xmi:id"] + "' in this file is empty!");
-                    name = name.replace(/^[^A-Za-z]+|[^A-Za-z\d]+$/g, "");
-                    name = name.replace(/[^\w]+/g, '_');
+                    obj.attributes().name?name=obj.attributes().name:console.error("ERROR:The attribute 'name' of tag 'xmi:id="+obj.attributes()["xmi:id"]+"' in this file is empty!");
+                    name=name.replace(/^[^A-Za-z0-9]+|[^A-Za-z0-9\d]+$/g,"");
+                    name=name.replace(/[^\w\.-]+/g,'_');
                     modName.push(name);
-                    /*  for(var j = 0; j < yangModule.length; j++){
-                         if(yangModule[j].name == name){
+                    /!*  for(var j=0;j<yangModule.length;j++){
+                         if(yangModule[j].name==name){
                          yangModule[j].import.push(modName.join("-"));
                          break;
                          }
-                         }*/
-                    var namespace = "\"urn:ONF:" + modName.join("-") + "\"";
+                         }*!/
+                    var namespace="\"urn:ONF:"+modName.join("-")+"\"";
 
                     var comment = "";
                     if (xmi["ownedComment"]) {
-                        comment = parseComment(xmi);
-                        /*if(xmi['ownedComment'].array){
-                            //comment = "";
+                        if(xmi['ownedComment'].array){
+                            //comment="";
                             comment += xmi['ownedComment'].array[0].body.text();
                             for(var i = 1; i < xmi['ownedComment'].array.length; i++){
                                 if(xmi['ownedComment'].array[i].body.hasOwnProperty("text")){
@@ -1701,7 +2052,7 @@ function createElement(xmi){
                             }
                         }else if(xmi['ownedComment'].body){
                             comment = xmi['ownedComment'].body.text();
-                        }*/
+                        }
                     }
 
                     var m = new Module(modName.join("-"), namespace, "", modName.join("-"), "", "", "", comment, currentFileName);//create a new module by recursion
@@ -1709,9 +2060,8 @@ function createElement(xmi){
                     createElement(obj);
                    // return;
                 }
-                else {
+                else {*/
                     var a = obj.attributes()["xmi:type"];
-                    //parse xmi:type
                     switch(a){
                         case "uml:Enumeration":
                             createClass(obj, "enumeration");
@@ -1723,6 +2073,9 @@ function createElement(xmi){
                             createClass(obj, "typedef");
                             break;
                         case "uml:Class":
+                            createClass(obj, "grouping");
+                            break;
+                        case "uml:Package":
                             createClass(obj, "grouping");
                             break;
                         case "uml:Operation":
@@ -1737,22 +2090,23 @@ function createElement(xmi){
                         case "uml:Signal":
                             createClass(obj, "notification");
                             break;
-                        default:break;
+                        default:
+                            break;
                     }
-                }
+                //}
             }
         }
-    }
-    modName.pop(1);
+    //}
+    //modName.pop(1);
 }
 
 function createClass(obj, nodeType) {
     try {
         var name;
         obj.attributes().name ? name = obj.attributes().name : console.error("ERROR:The attribute 'name' of tag 'xmi:id=" + obj.attributes()["xmi:id"] + "' in this file is empty!");
-     //   name = name.replace(/:+\s*|\s+/g, '_');
-        name = name.replace(/^[^A-Za-z|_]+|[^A-Za-z|_\d]+$/g, "");
-        name = name.replace(/[^\w]+/g, '_');
+     //   name=name.replace(/:+\s*|\s+/g, '_');
+        name = name.replace(/^[^A-Za-z0-9|_]+|[^A-Za-z0-9|_\d]+$/g, "");
+        name = name.replace(/[^\w\.-]+/g, '_');
         var id = obj.attributes()["xmi:id"];
         var type = obj.attributes()["xmi:type"].split(":")[1];
         var config;
@@ -1760,14 +2114,15 @@ function createClass(obj, nodeType) {
         var isOrdered;
         obj.attributes().isOrdered ? isOrdered = obj.attributes().isOrdered : isOrdered = false;
         var path;
-        if(modName.length > 3 && nodeType !== "rpc"){
-            path = modName[0] + "-" + modName[1] + "-" + modName[2];
+        /*if(modName.length>3&&nodeType!=="rpc"){
+            path=modName[0]+"-"+modName[1]+"-"+modName[2]
         }else{
             path = modName.join("-");
-        }
-        var comment = "";
+        }*/
+        path = modName.join("-");
         if (obj["ownedComment"]) {
-            comment = parseComment(obj);
+            var comment = parseComment(obj);
+
             /*var len;
             var comment = "";
             obj["ownedComment"].array ? len = obj["ownedComment"].array.length : len = 1;
@@ -1803,7 +2158,7 @@ function createClass(obj, nodeType) {
                 var gen;
                 len == 1 ? gen = obj['generalization'] : gen = obj['generalization'].array[i];
                 node.buildGeneral(gen);
-                //将uses的type值添加到grouping数组中
+                //add type of 'uses' to 'grouping'.
                 for (var j = 0; j < Grouping.length; j++) {
                     if (Grouping[j].id == node.generalization[i] && Grouping[j].fileName == node.fileName) {
                         break;
@@ -1858,7 +2213,7 @@ function createClass(obj, nodeType) {
                                 node.attribute[i].isleafRef = true;
                                 break;
                             }
-                            else if(openModelAtt[k].passedByReference==false) {
+                            else if(openModelAtt[k].passedByReference == false){
                                 node.attribute[i].isleafRef = false;
                                 break;
                             }
@@ -1887,6 +2242,12 @@ function createClass(obj, nodeType) {
                             att.attributes().name ? node.key[openModelAtt[k].key-1] = att.attributes().name : null;
                             node.attribute[i].partOfObjectKey = openModelAtt[k].key;
                         }
+                    }
+                }
+                for(var k = 0; k < use.length; k++){
+                    if(use[k].id == node.attribute[i].id && use[k].fileName == node.attribute[i].fileName){
+                        node.attribute[i].use = true;
+                        use[k].name = node.attribute[i].name;
                     }
                 }
 
@@ -1988,6 +2349,17 @@ function createClass(obj, nodeType) {
                 }
             }
         }
+        for(var i = 0; i < merges.length; i++){
+            if(node.id == merges[i].id && node.fileName == merges[i].fileName){
+                node.mergeInto = merges[i].mergeInto;
+                merges[i].name = node.name;
+                for(var j = 0; j < node.attribute.length; j++){
+                    if(node.attribute[j].use){
+                        merges[i].childrenId.push(node.attribute[j].id);
+                    }
+                }
+            }
+        }
         //if(node.key == undefined){
         //    node.key = "localId";
         //}
@@ -2007,7 +2379,7 @@ function createClass(obj, nodeType) {
 function createAssociation(obj, fileName) {
     var id = obj.attributes()["xmi:id"];
     var memberEnd = [];
-    var memberEnd1,             //[memberEnd]中出现过的那个
+    var memberEnd1,             //appear in [memberEnd]
         memberEnd2;
     var associationName = obj.attributes().name;
     var ownedEndName;
@@ -2178,13 +2550,40 @@ function parseComment(xmi){
 }
 
 function obj2yang(ele){
+    for(var t = 0; t < yangModule.length; t++){
+        for(var j = 0; j < packages.length; j++){
+            if(packages[j].path == "" && yangModule[t].fileName == packages[j].fileName){
+                yangModule[t].children.push(packages[j]);
+            }
+        }
+    }
+    var tempPath;
+    for(var j = 0; j < packages.length; j++){
+        for(var k = 0; k < packages.length; k++){
+            if(packages[j].path == "" && packages[j].fileName == packages[k].fileName){
+                tempPath = packages[j].name;
+            }else{
+                tempPath = packages[j].path + "-" + packages[j].name;
+            }
+            if(tempPath == packages[k].path){
+                packages[j].children.push(packages[k]);
+            }
+        }
+    }
+    var feat = [];
     for(var i = 0; i < ele.length; i++){
         var obj;
-        var feat = [];
         for(var j = 0; j < openModelclass.length; j++) {
             if(openModelclass[j].id == ele[i].id && openModelclass[j].fileName == ele[i].fileName){
                 if(openModelclass[j].condition){
-                    feat.push(createFeature(openModelclass[j]));
+                    for(var k = 0; k < feat.length; k++){
+                        if(feat[k].name == openModelclass[j].condition && feat[k].fileName == openModelclass[j].fileName){
+                            break;
+                        }
+                    }
+                    if(k == feat.length){
+                        feat.push(createFeature(openModelclass[j], ele[i].path));
+                    }
                 }
                 break;
             }
@@ -2242,20 +2641,21 @@ function obj2yang(ele){
                     if(Class[k].id == ele[i].generalization[j] && Class[k].fileName == ele[i].fileName){
                         var Gname;
                         Class[k].Gname !== undefined ? Gname = Class[k].Gname : Gname = Class[k].name;
-                        if(ele[i].path == Class[k].path){
+                        if(ele[i].fileName == Class[k].fileName){
                             if(Class[k].support){
-                                obj.uses = new Uses(Gname, Class[k].support)
+                                obj.uses = new Uses(Class[k].name, Class[k].support)
                             }else{
-                                obj.uses.push(Gname);
+                                //obj.uses.push(Class[k]);
+                                obj.uses.push(Class[k].name);
                             }
                         }
                         else{
                             if(Class[k].support){
-                                obj.uses = new Uses(Class[k].path + ":" + Gname, Class[k].support)
+                                obj.uses = new Uses(Class[k].fileName.split('.')[0] + ":" + Class[k].name, Class[k].support)
                             }else{
-                                obj.uses.push(Class[k].path + ":" + Gname);
+                                obj.uses.push(Class[k].fileName.split('.')[0] + ":" + Class[k].name);
                             }
-                            importMod(ele[i], Class[k]);
+                            //importMod(ele[i],Class[k]);
                         }
                         break;
                     }
@@ -2276,11 +2676,11 @@ function obj2yang(ele){
                             ele[i].attribute[j].nodeType = "leaf-list";
                         }
                         ele[i].attribute[j].isUses = false;
-                        if(Typedef[k].path == ele[i].path){
+                        if(Typedef[k].fileName == ele[i].fileName){
                             ele[i].attribute[j].type = Typedef[k].name;
                         }else{
-                            ele[i].attribute[j].type = Typedef[k].path + ":" + Typedef[k].name;
-                            importMod(ele[i], Typedef[k]);//add element "import" to module
+                            ele[i].attribute[j].type = Typedef[k].fileName.split('.')[0] + ":" + Typedef[k].name;
+                            //importMod(ele[i], Typedef[k]);//add element "import" to module
                         }
                     }
                 }
@@ -2294,9 +2694,18 @@ function obj2yang(ele){
                     if(openModelAtt[k].id == ele[i].attribute[j].id && openModelAtt[k].fileName && ele[i].fileName){
                         units = openModelAtt[k].units;
                         vr = openModelAtt[k].valueRange;
-                        if(openModelAtt[k].condition){
-                            feat.push(createFeature(openModelAtt[k]));
-                            ele[i].attribute[j].support = feat[feat.length - 1].name;
+                        if(openModelAtt[k].condition != undefined){
+                            for(var m = 0; m < feat.length; m++){
+                                if(feat[m].name == openModelAtt[k].condition && feat[m].fileName == openModelAtt[k].fileName){
+                                    break;
+                                }
+                            }
+                            if(m == feat.length){
+                                feat.push(createFeature(openModelAtt[k], ele[i].path));
+                                ele[i].attribute[j].support = feat[feat.length - 1].name;
+                            }else{
+                                ele[i].attribute[j].support = feat[m].name;
+                            }
                         }
                         if(openModelAtt[k].status){
                             ele[i].attribute[j].status = openModelAtt[k].status;
@@ -2327,7 +2736,12 @@ function obj2yang(ele){
                             //recursion
                             ele[i].attribute[j].key = Class[k].key;
                             if(i == k){
-                                ele[i].attribute[j].type = "leafref+path '/" + Class[k].instancePath.split(":")[1] + "'";
+                                if(Class[k].instancePath[0] == "/"){
+                                    ele[i].attribute[j].type = "leafref+path '" + Class[k].instancePath + "'";
+                                }
+                                else{
+                                    ele[i].attribute[j].type = "leafref+path '/" + Class[k].instancePath + "'";
+                                }
                                 if(Class[k].isAbstract){
                                     ele[i].attribute[j].type = "string";
                                 }
@@ -2346,21 +2760,22 @@ function obj2yang(ele){
                                         ele[i].attribute[j].type = "leafref+path '/" + Class[k].instancePath.split(":")[1] + "'";
                                     }else{
                                         ele[i].attribute[j].type = "leafref+path '/" + Class[k].instancePath + "'";
-                                        //add element "import" to module
-                                        for (var t = 0; t < yangModule.length; t++) {
-                                            if (ele[i].path == yangModule[t].name) {
-                                                for (var f = 0; f < yangModule[t].import.length; f++) {
-                                                    if (yangModule[t].import[f] == p) {
-                                                        break;
-                                                    }
-                                                }
-                                                if (f == yangModule[t].import.length) {
-                                                    yangModule[t].import.push(p);
+                                    }
+                                    //add element "import" to module
+                                    /*for (var t = 0; t < yangModule.length; t++) {
+                                        if (ele[i].fileName == yangModule[t].fileName) {
+                                            for (var f = 0; f < yangModule[t].import.length; f++) {
+                                                if (yangModule[t].import[f] == Class[k].fileName.split('.')[0]) {
                                                     break;
                                                 }
                                             }
+                                            if (f == yangModule[t].import.length) {
+                                                yangModule[t].import.push(Class[k].fileName.split('.')[0]);
+                                                break;
+                                            }
                                         }
-                                    }
+                                    }*/
+                                    //}
                                     /*if(Class[k].isAbstract){
                                      ele[i].attribute[j].type = "string";
                                      }*/
@@ -2375,19 +2790,21 @@ function obj2yang(ele){
                                 else{
                                     var Gname;
                                     Class[k].Gname !== undefined ? Gname = Class[k].Gname : Gname = Class[k].name;
-                                    if (ele[i].path == Class[k].path) {
+                                    if (ele[i].fileName == Class[k].fileName) {
                                         if(Class[k].support){
                                             ele[i].attribute[j].isUses = new Uses(Gname, Class[k].support)
                                         }else{
-                                            ele[i].attribute[j].isUses = Gname;
+                                            //ele[i].attribute[j].isUses =Gname;
+                                            ele[i].attribute[j].isUses = Class[k].name;
                                         }
                                         break;
                                     } else {
-                                        importMod(ele[i], Class[k]);//add element "import" to module
+                                        //importMod(ele[i],Class[k]);//add element "import" to module
                                         if(Class[k].support){
-                                            ele[i].attribute[j].isUses = new Uses(Class[k].path + ":" + Gname,Class[k].support)
+                                            ele[i].attribute[j].isUses = new Uses(Class[k].fileName.split('.')[0] + ":" + Gname, Class[k].support)
                                         }else{
-                                            ele[i].attribute[j].isUses = Class[k].path + ":" + Gname;
+                                            //ele[i].attribute[j].isUses = Class[k].fileName.split('.')[0] + ":" + Gname;
+                                            ele[i].attribute[j].isUses = Class[k].fileName.split('.')[0] + ":" + Gname;
                                         }
                                         break;
                                     }
@@ -2433,11 +2850,11 @@ function obj2yang(ele){
                             pValue.nodeType = "leaf";
                         }
                         pValue.isUses = false;
-                        if(Typedef[k].path == ele[i].path){
+                        if(Typedef[k].fileName == ele[i].fileName){
                             pValue.type = Typedef[k].name;
                         }else{
-                            pValue.type = Typedef[k].path + ":" + Typedef[k].name;
-                            importMod(ele[i], Typedef[k]);
+                            pValue.type = Typedef[k].fileName.split('.')[0] + ":" + Typedef[k].name;
+                            //importMod(ele[i], Typedef[k]);
                         }
                         break;
                     }
@@ -2449,8 +2866,17 @@ function obj2yang(ele){
                         pValue.units = openModelAtt[k].units;
                         pValue.valueRange = openModelAtt[k].valueRange;
                         if(openModelAtt[k].condition){
-                            feat.push(createFeature(openModelAtt[k]));
-                            ele[i].attribute[j].support=feat[feat.length - 1].name;
+                            for(var m = 0; m < feat.length; m++){
+                                if(feat[m].name == openModelAtt[k].condition && feat[m].fileName == openModelAtt[k].fileName){
+                                    break;
+                                }
+                            }
+                            if(m == feat.length){
+                                feat.push(createFeature(openModelAtt[k], ele[i].path));
+                                ele[i].attribute[j].support = feat[feat.length - 1].name;
+                            }else{
+                                ele[i].attribute[j].support = feat[m].name;
+                            }
                         }
                         if(openModelAtt[k].status){
                             ele[i].attribute[j].status = openModelAtt[k].status;
@@ -2508,23 +2934,26 @@ function obj2yang(ele){
                             else {
                                 var Gname;
                                 Class[k].Gname !== undefined ? Gname = Class[k].Gname : Gname = Class[k].name;
-                                if (ele[i].path == Class[k].path) {
+                                if (ele[i].fileName == Class[k].fileName) {
                                     if (Class[k].support) {
                                         pValue.isUses = new Uses(Gname, Class[k].support)
                                     } else {
-                                        pValue.isUses = Gname;
+                                        //pValue.isUses = Gname;
+                                        pValue.isUses = Class[k].name;
+
                                     }
                                     break;
                                 }
                                 else {
                                     //
-                                    importMod(ele[i], Class[k]);//add element "import" to module
+                                    //importMod(ele[i], Class[k]);//add element "import" to module
                                     var Gname;
                                     Class[k].Gname !== undefined ? Gname = Class[k].Gname : Gname = Class[k].name;
                                     if (Class[k].support) {
-                                        pValue.isUses = new Uses(Class[k].path + ":" + Gname, Class[k].support)
+                                        pValue.isUses = new Uses(Class[k].fileName.split('.')[0] + ":" + Gname, Class[k].support)
                                     } else {
-                                        pValue.isUses = Class[k].path + ":" + Gname;
+                                        //pValue.isUses = Class[k].fileName.split('.')[0] + ":" + Gname;
+                                        pValue.isUses = Class[k].name;
                                     }
                                     pValue.key = Class[k].key;
                                     break;
@@ -2552,6 +2981,7 @@ function obj2yang(ele){
                     if(association[k].lowerValue){
                         obj["min-elements"] = association[k].lowerValue;
                     }
+                    obj.nodeType = "list";
                     break;
                 }
             }
@@ -2561,53 +2991,115 @@ function obj2yang(ele){
             obj.nodeType = "list";//
         }
         //add the "obj" to module by attribute "path"
-        for(var t = 0; t < yangModule.length; t++){
-            if(yangModule[t].name == ele[i].path && yangModule[t].fileName == ele[i].fileName){
+        var newobj;
+        var flag = true;
+        if(ele[i].nodeType == "notification"){
+            //var a;
+            newobj = new Node(ele[i].name, undefined, "notification", undefined, undefined, obj.id, obj.config, obj["ordered-by"], undefined, undefined, ele[i].fileName);
+            //newobj.uses.push(obj.name);
+            newobj.uses.push(obj.name);
+            
+        } else if(ele[i].name == "Context") {
+        //else if(ele[i].isAbstract == false && ele[i].nodeType == "grouping"){
+            flag=false;
+            newobj = new Node(ele[i].name, undefined, "container", undefined, undefined, obj.id, obj.config, obj["ordered-by"], undefined, undefined, ele[i].fileName);
+            newobj.key = obj.key;
+            newobj.keyid = obj.keyid;
+            //newobj.uses.push(obj.name);
+            newobj.uses.push(obj.name);
+            if(obj.nodeType != "grouping"){
+                newobj.nodeType = obj.nodeType;
+                obj.nodeType = "grouping";
+            }
+            //decide whether a "container" is "list"
+            for (var k = 0; k < association.length; k++) {
+                if (ele[i].id == association[k].name) {
+                    newobj.nodeType = "list";
+                    if(association[k].upperValue){
+                        newobj["max-elements"] = association[k].upperValue;
+                    }
+                    if(association[k].lowerValue){
+                        newobj["min-elements"] = association[k].lowerValue;
+                    }
+                    break;
+                }
+            }
+            //newobj.nodeType = "list";//
+            if(newobj.nodeType !== "list"){
+                newobj["ordered-by"] = undefined;
+            }
+            console.info ("******* Top-Level Object: " + newobj.name + " Type:" + newobj.nodeType)
+        }
+        if(flag && !ele[i].isGrouping){
+            obj.name = ele[i].name;
+        }
+        if(ele[i].path == ""){
+            for(var t = 0; t < yangModule.length; t++){
+                if(ele[i].fileName == yangModule[t].fileName){
+                	if (ele[i].name == "Context" || ele[i].nodeType == "notification") {
+                    //if ((ele[i].isAbstract == false && ele[i].nodeType == "grouping") || ele[i].nodeType == "notification") {
+                        yangModule[t].children.push(newobj);
+                    }
+                    /*if (feat.length) {
+                        yangModule[t].children = yangModule[t].children.concat(feat);
+                    }*/
+                    yangModule[t].children.push(obj);
+                    break;
+                }
+            }
+        }
+
+        for(var t = 0; t < packages.length; t++) {
+            if (packages[t].path == "") {
+                tempPath = packages[t].name;
+            } else {
+                tempPath = packages[t].path + "-" + packages[t].name
+            }
+            if (tempPath == ele[i].path && packages[t].fileName == ele[i].fileName) {
                 //create a new node if "ele" needs to be instantiate
-                var newobj;
-                var flag = true;
-                if(ele[i].isAbstract == false && ele[i].isGrouping == false && obj.nodeType == "grouping"){
-                    flag = false;
-                    newobj = new Node(ele[i].name, undefined, "container", undefined, undefined, obj.id, obj.config, obj["ordered-by"], undefined, undefined, ele[i].fileName);
-                    newobj.key = obj.key;
-                    newobj.uses.push(obj.name);
-                    //decide whether a "container" is "list"
-                    for (var k = 0; k < association.length; k++) {
-                        if (ele[i].id == association[k].name && ele[i].fileName == association[k].fileName) {
-                            newobj.nodeType = "list";
-                            if(association[k].upperValue){
-                                newobj["max-elements"] = association[k].upperValue;
-                            }
-                            if(association[k].lowerValue){
-                                newobj["min-elements"] = association[k].lowerValue;
-                            }
-                            break;
-                        }
-                    }
-                    newobj.nodeType = "list";//
-                    if(newobj.nodeType !== "list"){
-                        newobj["ordered-by"] = undefined;
-                    }
-                    yangModule[t].children.push(newobj);
+            	if (ele[i].name == "Context" || ele[i].nodeType == "notification") {
+                //if ((ele[i].isAbstract == false && ele[i].nodeType == "grouping") || ele[i].nodeType == "notification") {
+                    packages[t].children.push(newobj)
                 }
-                if(flag && !ele[i].isGrouping){
-                    obj.name = ele[i].name;
-                }
-                if(feat.length){
-                    yangModule[t].children = yangModule[t].children.concat(feat);
-                }
-                yangModule[t].children.push(obj);
+                /*if (feat.length) {
+
+                    packages[t].children = packages[t].children.concat(feat);
+                }*/
+                packages[t].children.push(obj);
                 break;
             }
         }
-        yang.push(obj);
+    }
+    if(feat.length){
+        for(var i = 0; i < feat.length; i++){
+            if(feat[i].path == ""){
+                for(var j = 0; j < yangModule.length; j++){
+                    if(feat[i].fileName == yangModule[j].fileName){
+                        yangModule[j].children.push(feat[i]);
+                        break;
+                    }
+                }
+            }else{
+                for(var j = 0; j < packages.length; j++) {
+                    if (packages[j].path == "") {
+                        tempPath = packages[j].name;
+                    }else {
+                        tempPath = packages[j].path + "-" + packages[j].name;
+                    }
+                    if (tempPath == feat[i].path && packages[j].fileName == feat[i].fileName) {
+                        packages[j].children.push(feat[i]);
+                        break;
+                    }
+                }
+            }
+        }
     }
     console.log("xmi translate to yang successfully!")
 }
 
-var m = 1;
-function createFeature(obj){
-    var feat = new Feature(obj.id, "feature" + (m++), obj.condition);
+//var m = 1;
+function createFeature(obj, path){
+    var feat = new Feature(obj.id, obj.condition, path, "",obj.fileName);
     return feat;
 }
 
@@ -2662,6 +3154,24 @@ function parseOpenModelpandr(xmi){              //parse prune and refactor
         var pandr = new OpenModelPandr(id,currentFileName);
         openModelpandr.push(pandr);
     }
+}
+
+function parseMerge(xmi){
+    var obj = {};
+    if(xmi.attributes().mergeInto || xmi.attributes().mergeInto == ""){
+        obj.id = xmi.attributes()["base_Element"];
+        obj.mergeInto = xmi.attributes().mergeInto;
+        obj.fileName = currentFileName;
+        obj.childrenId = [];
+        merges.push(obj);
+    }
+}
+
+function parseUse(xmi){
+    var obj = {};
+    obj.id = xmi.attributes()["base_Element"];
+    obj.fileName = currentFileName;
+    use.push(obj);
 }
 
 function parseAssociation() {
@@ -2774,7 +3284,7 @@ function pruningAndRefactoring(realization){
                     client = association[j];
                     supplier = association[i];
                 }else{
-                    console.log("Warning: xmi:id=" + association[i].id + "don't match with clientFileName and supplierFileName!");
+                    console.log("Warning: xmi:id=" + association[i].id + " don't match with clientFileName and supplierFileName!");
                 }
             }
             if(client && supplier){

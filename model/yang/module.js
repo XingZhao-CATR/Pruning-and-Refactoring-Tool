@@ -31,7 +31,7 @@ Module.prototype.writeNode = function (layer) {
     }
     var name = "module " + this.name;
     var namespace;
-    this.namespace == "" || this.namespace == undefined ? namespace = PRE + "\tnamespace ;\r\n" : namespace = PRE + "\tnamespace " + this.namespace + ";\r\n";
+    this.namespace == "" || this.namespace == undefined ? namespace = PRE + "\tnamespace ;\r\n" : namespace = PRE + "\tnamespace \"" + this.namespace + "\";\r\n";
     var imp = "";
     if (this.import == [] || this.import == undefined) {
         imp = ""
@@ -47,17 +47,18 @@ Module.prototype.writeNode = function (layer) {
         this.organization = "ONF (Open Networking Foundation) IMP Working Group";
     }
     org = PRE + "\torganization \"" + this.organization + "\";\r\n";
-    var contact;
+    var contact = "";
     if(!this.contact){
-        this.contact = "WG Web\: <https://www.opennetworking.org/technical-communities/areas/services/>\r\n";
+        this.contact += "WG Web\: <https://www.opennetworking.org/technical-communities/areas/services/>\r\n";
         this.contact += "WG List\: <mailto: <wg list name>@opennetworking.org>\r\n";
         this.contact += "WG Chair: your-WG-chair\r\n";
         this.contact += "\t\t\<mailto:your-WG-chair@example.com>\r\n";
         this.contact += "Editor: your-name\r\n";
         this.contact += "\t\t\<mailto:your-email@example.com>";
-        this.contact = this.contact.replace(/\r\n/g, '\r\n' + PRE + '\t\t');
     }
-    this.contact == "" || this.contact == undefined ? contact = "" : contact = PRE + "\tcontact \"" + this.contact + "\";\r\n";
+    //this.contact == "" || this.contact == undefined ? contact = "" : contact = PRE + "\tcontact \"" + this.contact + "\";\r\n";
+    this.contact = this.contact.replace(/\r\n/g, '\r\n' + PRE + '\t\t');
+    contact = PRE + "\tcontact \"" + this.contact + "\";\r\n";
     var revis;
     //var date=new Date();
     Date.prototype.Format = function (fmt) { //author: meizz 

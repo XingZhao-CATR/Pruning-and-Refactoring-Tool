@@ -42,6 +42,7 @@ function ownedAttribute(id, name, type, comment, assoc, isReadOnly, isOrdered, f
     this.condition;                 //new
     this['min-elements'];
     this['max-elements'];
+    this.use = false;           //use stereotype in merge function
 }
 
 ownedAttribute.prototype.giveValue = function(obj){
@@ -58,11 +59,16 @@ ownedAttribute.prototype.giveValue = function(obj){
         }else{
             value = obj.defaultValue.value.attributes()['xsi:nil']
         }
+        if(value == "--"){
+            value = null;
+        }
     }
     else{
         value = null;
     }
-    this.defaultValue = value;
+    if(value != "NA"){
+        this.defaultValue = value;
+    }
     obj["lowerValue"] ? value = obj["lowerValue"].attributes().value : value = null;
     this['min-elements'] = value;
     obj["upperValue"] ? value = obj["upperValue"].attributes().value : value = null;

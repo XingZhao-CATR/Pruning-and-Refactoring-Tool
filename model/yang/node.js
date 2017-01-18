@@ -18,7 +18,8 @@ function Node(name, descrip, type, maxEle, minEle, id, config, isOrdered, featur
     this.id = id;
     this.name = name;
     this.nodeType = type;
-    this.key;
+    this.key = [];
+    //this.key;
     this.description = descrip;
     this.uses = [];
     this.status=status;
@@ -44,9 +45,11 @@ Node.prototype.buildChild = function (att, type) {
             t = att.type;
         }
         switch(t){
-            case "integer":att.type = "uint64";
+            case "integer":
+                att.type = "uint64";
                 break;
-            default:break;
+            default:
+                break;
         }*/
 
         if(typeof att.type == "object"){
@@ -72,18 +75,23 @@ Node.prototype.buildChild = function (att, type) {
             obj = new Node(att.name, att.description, att.nodeType, att['max-elements'], att['min-elements'], att.id, att.config, att.isOrdered, att.support, att.status, att.fileName);
             if (att.isUses) {
                 obj.buildUses(att);
-                if (att.config) {
-                    if (att.key) {
-                        obj.key = att.key;
-                    } else {
-                        //obj.key="localId";
+                //if (att.config) {
+                if (att.key) {
+                    if(att.key.length != 0){
+                        //console.log("!");
                     }
+                    if(obj.key.length != 0){
+                        console.log("!");
+                    }
+                    obj.key = att.key;
+                    //obj.keyid = att.keyid;
                 }
+                //}
             }
             obj.isGrouping = att.isGrouping;
             break;
         case "container":
-            obj = new Node(att.name, att.description, att.nodeType, att['max-elements'], att['min-elements'], att.id, att.config, att.support, att.status, att.fileName);
+            obj = new Node(att.name, att.description, att.nodeType, att['max-elements'], att['min-elements'], att.id, att.config,att.isOrdered, att.support, att.status, att.fileName);
             if (att.isUses) {
                 obj.buildUses(att);
             }
@@ -93,8 +101,9 @@ Node.prototype.buildChild = function (att, type) {
 	    obj = new Type(att.type, att.id, undefined, att.valueRange, undefined, att.description, att.units, att.fileName);
             break;
         case "enum":
-            obj = new Node(this.name, this.description, "enum");
-            obj.fileName = this.fileName;
+            this.name = this.name.replace(/[^\w\.-]+/g,'_');
+            obj = new Node(this.name, undefined, "enum");
+            obj.fileName = att.fileName;
             break;
         default :
             break;
@@ -137,15 +146,17 @@ Node.prototype.writeNode = function (layer) {
             break;
     }
     //if the nodetype of child node of list is list,then the nodetype of father node change to container
-    if(this.nodeType == "list"){
+    /*if(this.nodeType == "list"){
         var temp;
         for(temp = 0; temp < this.children.length; temp++){
             if(this.children[temp].nodeType == "list")
                 break;
         }
         if(temp < this.children.length)
-            this.nodeType="container";
-    }
+            this.nodeType = "container";
+    }*/
+
+    
     
     var name = this.nodeType + " " + this.name;
     if(!this.description){
@@ -194,12 +205,18 @@ Node.prototype.writeNode = function (layer) {
         if (this["max-elements"] == "*") {
             maxele = "";
         }
-        if (typeof this.key == "string") {
-            Key = PRE + "\tkey '" + this.key + "';\r\n";
+        if(this.key.array != undefined || this.key.length != 0){
+            if(this.key[0]){
+                this.key.forEach(function(item, index, array) { array[index] = Util.yangifyName(item); });
+                Key = PRE + "\tkey '" + this.key.join(" ") + "';\r\n";
+            }
+        }else{
+            console.warn("Warning: There is no key in the node " + this.name + " in \'" + this.fileName + "\'!")
         }
-        //else{
-        //    Key = PRE + "\tkey '" + "undefined';\r\n";
-        //}
+        /*if (typeof this.key=="string") {
+            Key = PRE + "\tkey '" + this.key + "';\r\n";
+        }*/
+
     } else {
         maxele = "";
         minele = "";
