@@ -2,7 +2,7 @@
 * Name: Pruning and Refactoring Tool
 * Copyright 2015 CAICT (China Academy of Information and Communication Technology (former China Academy of Telecommunication Research)). All Rights Reserved.
 *
-* Time : 2017-02-03 10:04:21
+* Time : 2017-02-03 10:15:37
 * Input  File : mapping.uml
 *               source.uml
 *               Source1.uml
