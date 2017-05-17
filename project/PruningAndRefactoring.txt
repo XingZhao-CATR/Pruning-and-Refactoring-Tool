@@ -2,11 +2,9 @@
 * Name: Pruning and Refactoring Tool
 * Copyright 2015 CAICT (China Academy of Information and Communication Technology (former China Academy of Telecommunication Research)). All Rights Reserved.
 *
-* Time : 2017-02-03 10:15:37
+* Time : 2017-05-12 10:33:28
 * Input  File : mapping.uml
 *               source.uml
-*               Source1.uml
-*               target.uml
 *               
 * Output File : PruningAndRefactoring.txt
 *
@@ -18,6 +16,20 @@ Class Comparison     :
 
 supplier     : Class1				client     : Class1			Class'name isn't changed.
 supplierFile : source.uml				clientFile : target.uml			File name isn't the same.
+supplier     : Class1				client     : Class1_Cp1			Class'name is changed.
+supplierFile : source.uml				clientFile : target.uml			File name isn't the same.
+supplier     : Class1				client     : Class1_Cp2			Class'name is changed.
+supplierFile : source.uml				clientFile : target.uml			File name isn't the same.
+supplier     : Class2				client     : Class2			Class'name isn't changed.
+supplierFile : source.uml				clientFile : target.uml			File name isn't the same.
+supplier     : Class2				client     : Class2_Sp1			Class'name is changed.
+supplierFile : source.uml				clientFile : target.uml			File name isn't the same.
+supplier     : Class2				client     : Class2_Sp2			Class'name is changed.
+supplierFile : source.uml				clientFile : target.uml			File name isn't the same.
+supplier     : Class3				client     : Class3			Class'name isn't changed.
+supplierFile : source.uml				clientFile : target.uml			File name isn't the same.
+supplier     : Class4				client     : Class4			Class'name isn't changed.
+supplierFile : source.uml				clientFile : target.uml			File name isn't the same.
 
 Attribute Comparison : 
 
@@ -26,7 +38,129 @@ supplierClass : Class1			clientClass : Class1
 supplierFile : source.uml				clientFile : target.uml			File name isn't the same.
 			config : true				config : true			Attribute's configs are the same.
 			nodeType : leaf				nodeType : leaf			Attribute's nodeTypes are the same.
+	Types Comparison :
+				name : string				name : string			names of types are the same.
+supplier      : Attribute1			client      : Attribute1_Cp1			Attribute'name is changed.
+supplierClass : Class1			clientClass : Class1_Cp1
+supplierFile : source.uml				clientFile : target.uml			File name isn't the same.
+			config : true				config : true			Attribute's configs are the same.
+			nodeType : leaf				nodeType : leaf			Attribute's nodeTypes are the same.
+	Types Comparison :
+				name : string				name : string			names of types are the same.
+supplier      : Attribute1			client      : Attribute1_Cp2			Attribute'name is changed.
+supplierClass : Class1			clientClass : Class1_Cp2
+supplierFile : source.uml				clientFile : target.uml			File name isn't the same.
+			config : true				config : true			Attribute's configs are the same.
+			nodeType : leaf				nodeType : leaf			Attribute's nodeTypes are the same.
+	Types Comparison :
+				name : string				name : string			names of types are the same.
+supplier      : Attribute21			client      : Attribute21			Attribute'name isn't changed.
+supplierClass : Class2			clientClass : Class2
+supplierFile : source.uml				clientFile : target.uml			File name isn't the same.
+			config : true				config : true			Attribute's configs are the same.
+			nodeType : leaf				nodeType : leaf			Attribute's nodeTypes are the same.
 			isUses : true				isUses : true			Attribute's isUses are the same.
 			isleafRef : true				isleafRef : true			Attribute's isleafRefs are the same.
 	Types Comparison :
 				name : string				name : string			names of types are the same.
+supplier      : class1			client      : class1			Attribute'name isn't changed.
+supplierClass : Class2			clientClass : Class2
+supplierFile : source.uml				clientFile : target.uml			File name isn't the same.
+			config : true				config : true			Attribute's configs are the same.
+			nodeType : leaf				nodeType : leaf			Attribute's nodeTypes are the same.
+			isUses : true				isUses : true			Attribute's isUses are the same.
+			key : 				key : 			Attribute's keys aren't the same.
+			isleafRef : true				isleafRef : true			Attribute's isleafRefs are the same.
+	Types Comparison :
+				name : leafref				name : leafref			names of types are the same.
+				path : path '/Class1/'				path : path '/Class1/'			paths of types are the same.
+supplier      : class1			client      : class1_Cp0as1			Attribute'name is changed.
+supplierClass : Class2			clientClass : Class2
+supplierFile : source.uml				clientFile : target.uml			File name isn't the same.
+			config : true				config : true			Attribute's configs are the same.
+			nodeType : leaf				nodeType : leaf			Attribute's nodeTypes are the same.
+			isUses : true				isUses : true			Attribute's isUses are the same.
+			key : 				key : 			Attribute's keys aren't the same.
+			isleafRef : true				isleafRef : true			Attribute's isleafRefs are the same.
+	Types Comparison :
+				name : leafref				name : leafref			names of types are the same.
+				path : path '/Class1/'				path : path '/Class1_Cp1/'			paths of types aren't the same.
+supplier      : class1			client      : class1_Cp0as2			Attribute'name is changed.
+supplierClass : Class2			clientClass : Class2
+supplierFile : source.uml				clientFile : target.uml			File name isn't the same.
+			config : true				config : true			Attribute's configs are the same.
+			nodeType : leaf				nodeType : leaf			Attribute's nodeTypes are the same.
+			isUses : true				isUses : true			Attribute's isUses are the same.
+			key : 				key : 			Attribute's keys aren't the same.
+			isleafRef : true				isleafRef : true			Attribute's isleafRefs are the same.
+	Types Comparison :
+				name : leafref				name : leafref			names of types are the same.
+				path : path '/Class1/'				path : path '/Class1_Cp2/'			paths of types aren't the same.
+supplier      : Attribute22			client      : Attribute22			Attribute'name isn't changed.
+supplierClass : Class2			clientClass : Class2
+supplierFile : source.uml				clientFile : target.uml			File name isn't the same.
+			config : true				config : true			Attribute's configs are the same.
+			nodeType : leaf				nodeType : leaf			Attribute's nodeTypes are the same.
+			isUses : true				isUses : true			Attribute's isUses are the same.
+			isleafRef : true				isleafRef : true			Attribute's isleafRefs are the same.
+	Types Comparison :
+				name : string				name : string			names of types are the same.
+supplier      : Attribute3			client      : Attribute3			Attribute'name isn't changed.
+supplierClass : Class3			clientClass : Class3
+supplierFile : source.uml				clientFile : target.uml			File name isn't the same.
+			config : true				config : true			Attribute's configs are the same.
+			nodeType : leaf				nodeType : leaf			Attribute's nodeTypes are the same.
+	Types Comparison :
+				name : uint64				name : uint64			names of types are the same.
+supplier      : class1			client      : class1			Attribute'name isn't changed.
+supplierClass : Class3			clientClass : Class3
+supplierFile : source.uml				clientFile : target.uml			File name isn't the same.
+			config : true				config : true			Attribute's configs are the same.
+			nodeType : leaf				nodeType : leaf			Attribute's nodeTypes are the same.
+			isUses : true				isUses : true			Attribute's isUses are the same.
+			key : 				key : 			Attribute's keys aren't the same.
+			isleafRef : true				isleafRef : true			Attribute's isleafRefs are the same.
+	Types Comparison :
+				name : leafref				name : leafref			names of types are the same.
+				path : path '/Class1/'				path : path '/Class1/'			paths of types are the same.
+supplier      : class1			client      : class1_Cp0as1			Attribute'name is changed.
+supplierClass : Class3			clientClass : Class3
+supplierFile : source.uml				clientFile : target.uml			File name isn't the same.
+			config : true				config : true			Attribute's configs are the same.
+			nodeType : leaf				nodeType : leaf			Attribute's nodeTypes are the same.
+			isUses : true				isUses : true			Attribute's isUses are the same.
+			key : 				key : 			Attribute's keys aren't the same.
+			isleafRef : true				isleafRef : true			Attribute's isleafRefs are the same.
+	Types Comparison :
+				name : leafref				name : leafref			names of types are the same.
+				path : path '/Class1/'				path : path '/Class1_Cp1/'			paths of types aren't the same.
+supplier      : class1			client      : class1_Cp0as2			Attribute'name is changed.
+supplierClass : Class3			clientClass : Class3
+supplierFile : source.uml				clientFile : target.uml			File name isn't the same.
+			config : true				config : true			Attribute's configs are the same.
+			nodeType : leaf				nodeType : leaf			Attribute's nodeTypes are the same.
+			isUses : true				isUses : true			Attribute's isUses are the same.
+			key : 				key : 			Attribute's keys aren't the same.
+			isleafRef : true				isleafRef : true			Attribute's isleafRefs are the same.
+	Types Comparison :
+				name : leafref				name : leafref			names of types are the same.
+				path : path '/Class1/'				path : path '/Class1_Cp2/'			paths of types aren't the same.
+supplier      : Attribute4			client      : Attribute4			Attribute'name isn't changed.
+supplierClass : Class4			clientClass : Class4
+supplierFile : source.uml				clientFile : target.uml			File name isn't the same.
+			config : true				config : true			Attribute's configs are the same.
+			nodeType : leaf-list				nodeType : leaf-list			Attribute's nodeTypes are the same.
+			max-elements : *				max-elements : *			Attribute's max-elements are the same.
+	Types Comparison :
+				name : string				name : string			names of types are the same.
+supplier      : class3			client      : class3			Attribute'name isn't changed.
+supplierClass : Class4			clientClass : Class4
+supplierFile : source.uml				clientFile : target.uml			File name isn't the same.
+			config : true				config : true			Attribute's configs are the same.
+			nodeType : leaf				nodeType : leaf			Attribute's nodeTypes are the same.
+			isUses : true				isUses : true			Attribute's isUses are the same.
+			key : 				key : 			Attribute's keys aren't the same.
+			isleafRef : true				isleafRef : true			Attribute's isleafRefs are the same.
+	Types Comparison :
+				name : leafref				name : leafref			names of types are the same.
+				path : path '/Class3/'				path : path '/Class3/'			paths of types are the same.

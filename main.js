@@ -33,6 +33,7 @@ var xmlreader = require('xmlreader'),
     Realization = require('./model/yang/Realization.js'),
     ClassCompare = require('./model/classcompare.js'),
     AttributeCompare = require('./model/AttributeCompare.js'),
+    buildPrunedAtt=require('./model/buildPrunedAtt.js'),
     AssociationCompare = require('./model/AssociationCompare.js'),
     ClassWithAssociation = require('./model/ClassWithAssociation.js');
 
@@ -43,6 +44,10 @@ var classCompare = [];
 var attributeCompare = [];
 var associationCompare = [];
 var classWithAssociation = [];
+var prunedClass=[];
+var prunedAttribute=[];
+var addedClass=[];
+var addedAttribute=[];
 var Class = [];//The array of object class
 var openModelAtt = [];//The array of openmodelprofile
 var openModelclass = [];//The array of openmodelprofile
@@ -70,6 +75,7 @@ var config = {};
 var merges = [];
 var use = [];
 var file = [];
+var prunedFlag=0;
 
 var result = main_Entrance();
 
@@ -98,22 +104,47 @@ function main_Entrance(){
                     for(var i = 0; i < files.length; i++) {
                         var allowedFileExtensions = ['xml', 'uml'];
                         var currentFileExtension = files[i].split('.').pop();
-                        if(allowedFileExtensions.indexOf(currentFileExtension) !== -1 && files[i] != "mapping.uml" && files[i] != clientFileName) {   //match postfix of files
-                            currentFileName = files[i];
+                       // if(allowedFileExtensions.indexOf(currentFileExtension) !== -1 && files[i] != "mapping.uml"&&(files[i]==supplierFileName||files[i]==clientFileName) ) {   //match postfix of files
+                        if(allowedFileExtensions.indexOf(currentFileExtension) !== -1 && files[i] != "mapping.uml" ) {
+                                currentFileName = files[i];
                             fileNum++;
-                            if(currentFileName != supplierFileName){
+                           /* if(currentFileName != supplierFileName){
                                 file.push(currentFileName);
-                            }
+                            }*/
                             parseModule(files[i]);
                         }
+                        var flag=0;
+                        if(files[i].toLowerCase() == clientFileName){
+                            flag=1;
+                        }
                     }
-                    currentFileName = clientFileName;
-                    clone();
-                    merge();
-                    copyClass();
-                    splitClass();
-                    parseModule(clientFileName);
-                    fileNum++;
+                    if(flag==0){
+                        prunedFlag=1;
+                        currentFileName = clientFileName;
+                        clone();
+                        merge(files);
+                        copyClass();
+                        splitClass();
+                        fileNum++;
+                        parseModule(clientFileName);
+                    }
+
+
+                /*    for(var i = 0; i < files.length; i++) {
+                        if(files[i].toLowerCase() == clientFileName){
+                            break;
+                        }else{
+                            currentFileName = clientFileName;
+                            clone();
+                            merge();
+                            copyClass();
+                            splitClass();
+                            fileNum++;
+                            parseModule(clientFileName);
+                        }
+                    }*/
+
+
 
                     currentFileName = undefined;
                     //read
@@ -182,7 +213,7 @@ function main_Entrance(){
                         }
                         obj2yang(Class);//the function is used to mapping to yang
                         parseAssociation();
-                        pruningAndRefactoring(realization);
+                        pruningAndRefactoring();
                         writeLogFile(files);
                         writeUml();
                         //xmlWrite();
@@ -429,150 +460,171 @@ function clone(){
     }
 }
 
-function merge(){
+
+function merge(files) {
     var data = fs.readFileSync("./project/" + clientFileName, {encoding: 'utf8'});
-    try{
-        for(var i = 0; i < merges.length; i++){
-            if(merges[i].fileName == supplierFileName && merges[i].mergeInto == ""){
-                var reg = new RegExp('\\s+<packagedElement xmi:type="uml:Class" xmi:id="' + merges[i].id + '"[\\s\\S]*?</packagedElement>');
-                if(data.match(reg) == null){
-                    console.warn("Warning: There is no class xmi:id= \"" + merges[i].id + "\" in " + clientFileName + ". Please recheck your input file!")
-                    throw (e);
-                }
-                var startIndex = data.indexOf(data.match(reg)[0]);
-                var endIndex = data.indexOf("</packagedElement>", startIndex) + "</packagedElement>".length;
-                var classData = data.substring(startIndex, endIndex);
-                var attStartIndex = 0;
-                var attEndIndex = -1;
-                var attributeData = "";
-                while(classData.match(new RegExp("\\s+<ownedAttribute")) != null){
-                    if(classData.indexOf(classData.match(new RegExp("\\s+<ownedAttribute"))[0], attStartIndex) == -1)
+    if (merges && merges.length > 0) {
+        try {
+            for (var i = 0; i < merges.length; i++) {
+                if (merges[i].fileName == supplierFileName && merges[i].mergeInto == "") {
+                    var reg = new RegExp('\\s+<packagedElement xmi:type="uml:Class" xmi:id="' + merges[i].id + '"[\\s\\S]*?</packagedElement>');
+                    if (data.match(reg) == null) {
+                        console.warn("Warning: There is no class xmi:id= \"" + merges[i].id + "\" in " + clientFileName + ". Please recheck your input file!")
                         break;
-                    attStartIndex = classData.indexOf(classData.match(new RegExp("\\s+<ownedAttribute"))[0], attStartIndex);
-                    if(classData.indexOf("/>", attStartIndex) < classData.indexOf("\r\n", attStartIndex + 1)){
-                        attEndIndex = classData.indexOf("/>", attStartIndex) + 2;
-                    }else{
-                        attEndIndex = classData.indexOf("</ownedAttribute>", attStartIndex) + "</ownedAttribute>".length;
+                        //throw (e);
                     }
-                    attributeData += classData.substring(attStartIndex, attEndIndex);
-                    classData = classData.substring(0, attStartIndex) + classData.substring(attEndIndex);
+                    var startIndex = data.indexOf(data.match(reg)[0]);
+                    var endIndex = data.indexOf("</packagedElement>", startIndex) + "</packagedElement>".length;
+                    var classData = data.substring(startIndex, endIndex);
+                    var attStartIndex = 0;
+                    var attEndIndex = -1;
+                    var attributeData = "";
+                    while (classData.match(new RegExp("\\s+<ownedAttribute")) != null) {
+                        if (classData.indexOf(classData.match(new RegExp("\\s+<ownedAttribute"))[0], attStartIndex) == -1)
+                            break;
+                        attStartIndex = classData.indexOf(classData.match(new RegExp("\\s+<ownedAttribute"))[0], attStartIndex);
+                        if (classData.indexOf("/>", attStartIndex) < classData.indexOf("\r\n", attStartIndex + 1)) {
+                            attEndIndex = classData.indexOf("/>", attStartIndex) + 2;
+                        } else {
+                            attEndIndex = classData.indexOf("</ownedAttribute>", attStartIndex) + "</ownedAttribute>".length;
+                        }
+                        attributeData += classData.substring(attStartIndex, attEndIndex);
+                        classData = classData.substring(0, attStartIndex) + classData.substring(attEndIndex);
+                    }
+                    attributeData += "\r\n/>";   //avoid indexOf() = -1
+                    var matchData = "";
+                    for (var j = 0; j < merges[i].childrenId.length; j++) {
+                        var reg = new RegExp('\\s+<ownedAttribute xmi:type="uml:Property" xmi:id="' + merges[i].childrenId[j]);
+                        if (attributeData.match(reg) == null) {
+                            console.warn("Warning: There is no attribute xmi:id= \"" + merges[i].childrenId[j] + "\" in " + clientFileName + ". Please recheck your input file!")
+                            break;//throw (e);
+                        }
+                        var matchStartIndex = attributeData.indexOf(attributeData.match(reg)[0]);
+                        var matchEndIndex = -1;
+                        if (attributeData.indexOf("/>", matchStartIndex) < attributeData.indexOf("\r\n", matchStartIndex + 1)) {
+                            matchEndIndex = attributeData.indexOf("/>", matchStartIndex) + 2;
+                        } else {
+                            matchEndIndex = attributeData.indexOf("</ownedAttribute>", matchStartIndex) + "</ownedAttribute>".length;
+                        }
+                        matchData += attributeData.substring(matchStartIndex, matchEndIndex);
+                    }
+                    var insertIndex = classData.indexOf(classData.match(new RegExp('\\s+</packagedElement>')));
+                    classData = classData.substring(0, insertIndex) + matchData + classData.substring(insertIndex);
+                    data = data.substring(0, startIndex) + classData + data.substring(endIndex);
                 }
-                attributeData += "\r\n/>";   //avoid indexOf() = -1
-                var matchData = "";
-                for(var j = 0; j < merges[i].childrenId.length; j++){
-                    var reg = new RegExp('\\s+<ownedAttribute xmi:type="uml:Property" xmi:id="' + merges[i].childrenId[j]);
-                    if(attributeData.match(reg) == null){
-                        console.warn("Warning: There is no attribute xmi:id= \"" + merges[i].childrenId[j] + "\" in " + clientFileName + ". Please recheck your input file!")
-                        throw (e);
-                    }
-                    var matchStartIndex = attributeData.indexOf(attributeData.match(reg)[0]);
-                    var matchEndIndex = -1;
-                    if(attributeData.indexOf("/>", matchStartIndex) < attributeData.indexOf("\r\n", matchStartIndex + 1)){
-                        matchEndIndex = attributeData.indexOf("/>", matchStartIndex) + 2;
-                    }else{
-                        matchEndIndex = attributeData.indexOf("</ownedAttribute>", matchStartIndex) + "</ownedAttribute>".length;
-                    }
-                    matchData += attributeData.substring(matchStartIndex, matchEndIndex);
-                }
-                var insertIndex = classData.indexOf(classData.match(new RegExp('\\s+</packagedElement>')));
-                classData = classData.substring(0, insertIndex) + matchData + classData.substring(insertIndex);
-                data = data.substring(0, startIndex) + classData + data.substring(endIndex);
             }
+        } catch (e) {
+            console.log(e.stack);
+            throw (e.message);
         }
-    }catch (e){
-        console.log(e.stack);
-        throw (e.message);
-    }
-    try{
-        for(var i = 0; i < file.length; i++){
-            // source data is the file you will get information. Not supplier file , not client file.
-            var sourceData = fs.readFileSync("./project/" + file[i], {encoding: 'utf8'});
-            for(var j = 0; j < merges.length; j++){
-                if(file[i] == merges[j].fileName){
-                    var insertData = "";
-                    for(var k = 0; k < merges[j].childrenId.length; k++){
-                        var reg = new RegExp('\\s+<ownedAttribute xmi:type="uml:Property" xmi:id="' + merges[j].childrenId[k]);
-                        if(sourceData.match(reg) == null){
-                            console.warn("Warning: There is no attribute xmi:id= \"" + merges[j].childrenId[k] + "\" in " + file[i] + ". Please recheck your input file!")
-                            throw (e);
+        try {
+            for (var i = 0; i < files.length; i++) {
+                // source data is the file you will get information. Not supplier file , not client file.
+                var allowedFileExtensions = ['xml', 'uml'];
+                var currentFileExtension = files[i].split('.').pop();
+                if (allowedFileExtensions.indexOf(currentFileExtension) !== -1 && files[i] != "mapping.uml" && files[i].toLowerCase() !== supplierFileName && files[i].toLowerCase() !== clientFileName) {
+                    var sourceData = fs.readFileSync("./project/" + files[i], {encoding: 'utf8'});
+                    var openmodelAttId = [];
+                    for (var j = 0; j < merges.length; j++) {
+                        if (files[i].toLowerCase() == merges[j].fileName) {
+                            var insertData = "";
+                            for (var k = 0; k < merges[j].childrenId.length; k++) {
+                                var reg = new RegExp('\\s+<ownedAttribute xmi:type="uml:Property" xmi:id="' + merges[j].childrenId[k]);
+                                if (sourceData.match(reg) == null) {
+                                    console.warn("Warning: There is no attribute xmi:id= \"" + merges[j].childrenId[k] + "\" in " + files[i] + ". Please recheck your input file!")
+                                    break;//throw (e);
+                                }
+                                openmodelAttId.push(merges[j].childrenId[k]);
+                                var startIndex = sourceData.indexOf(sourceData.match(reg)[0]);
+                                var endIndex = -1;
+                                if (sourceData.indexOf("/>", startIndex) < sourceData.indexOf("\r\n", startIndex + 1)) {
+                                    endIndex = sourceData.indexOf("/>", startIndex) + 2;
+                                } else {
+                                    endIndex = sourceData.indexOf("</ownedAttribute>", startIndex) + "</ownedAttribute>".length;
+                                }
+                                insertData += sourceData.substring(startIndex, endIndex);
+                            }
+                            /* var reg = new RegExp('xmi:id="[\\w-.]+');
+                             var matchData = insertData.match(reg);
+                             if(matchData instanceof Array){
+                             for(var k = 0; k < matchData.length; k++){
+                             insertData = insertData.replace(matchData[k], matchData[k] + "_Mg");
+                             }}else{
+                             insertData = insertData.replace(matchData, matchData + "_Mg" );
+                             }*/
+                            var reg = new RegExp('name="[\\w-.]+');
+                            var matchData = insertData.match(reg);
+                            if (matchData instanceof Array) {
+                                for (var k = 0; k < matchData.length; k++) {
+                                    insertData = insertData.replace(matchData[k], matchData[k] + "_Mg");
+                                }
+                            } else {
+                                insertData = insertData.replace(matchData, matchData + "_Mg");
+                            }
+                            //var reg = new RegExp('\\s+<packagedElement xmi:type="uml:Class" xmi:id="' + merges[j].id);
+                            var reg = new RegExp('\\s+<packagedElement xmi:type="uml:Class" xmi:id="[\\w-.]+" name="' + merges[j].mergeInto);
+                            var matchData = data.match(reg)[0];
+                            var insertIndex = data.indexOf(matchData);
+                            insertIndex = data.indexOf("</packagedElement>", insertIndex);
+                            insertIndex = data.lastIndexOf("\r\n", insertIndex);
+
+                            //Adjust the indentation
+                            var indent1 = insertData.indexOf("<") - 2;
+                            var indent2 = matchData.indexOf("<");       //indent of class - "\r\n".length + 2
+                            if (indent1 != indent2) {
+                                var minus = Math.abs(indent1 - indent2);
+                                var PRE = "";
+                                while (minus--) {
+                                    PRE += " ";
+                                }
+                                if (indent1 > indent2) {
+                                    insertData = insertData.replace(new RegExp("\r\n" + PRE, "g"), "\r\n");
+                                } else {
+                                    insertData = insertData.replace(/\r\n/g, "\r\n" + PRE);
+
+                                }
+                            }
+                            data = data.substring(0, insertIndex) + insertData + data.substring(insertIndex);
                         }
-                        var startIndex = sourceData.indexOf(sourceData.match(reg)[0]);
-                        var endIndex = -1;
-                        if(sourceData.indexOf("/>", startIndex) < sourceData.indexOf("\r\n", startIndex + 1)){
-                            endIndex = sourceData.indexOf("/>", startIndex) + 2;
-                        }else{
-                            endIndex = sourceData.indexOf("</ownedAttribute>", startIndex) + "</ownedAttribute>".length;
-                        }
-                        insertData += sourceData.substring(startIndex, endIndex);
                     }
-                    var reg = new RegExp('xmi:id="[\\w-.]+');
-                    var matchData = insertData.match(reg);
-                    for(var k = 0; k < matchData.length; k++){
-                        insertData = insertData.replace(matchData[k], matchData[k] + "_Mg" + (i + 1));
-                    }
-                    var reg = new RegExp('name="[\\w-.]+');
-                    var matchData = insertData.match(reg);
-                    for(var k = 0; k < matchData.length; k++){
-                        insertData = insertData.replace(matchData[k], matchData[k] + "_Mg" + (i + 1));
-                    }
-                    //var reg = new RegExp('\\s+<packagedElement xmi:type="uml:Class" xmi:id="' + merges[j].id);
-                    var reg = new RegExp('\\s+<packagedElement xmi:type="uml:Class" xmi:id="[\\w-.]+" name="' + merges[j].mergeInto);
-                    var matchData = data.match(reg)[0];
-                    var insertIndex = data.indexOf(matchData);
-                    insertIndex = data.indexOf("</packagedElement>", insertIndex);
-                    insertIndex = data.lastIndexOf("\r\n", insertIndex);
-
-                    //Adjust the indentation
-                    var indent1 = insertData.indexOf("<") - 2;
-                    var indent2 = matchData.indexOf("<");       //indent of class - "\r\n".length + 2
-                    if(indent1 != indent2){
-                        var minus = Math.abs(indent1 - indent2);
-                        var PRE = "";
-                        while(minus--){
-                            PRE += " ";
-                        }
-                        if(indent1 > indent2){
-                            insertData = insertData.replace(new RegExp("\r\n" + PRE,"g"), "\r\n");
-                        }else{
-                            insertData = insertData.replace(/\r\n/g, "\r\n" + PRE);
-
-                        }
-                    }
-
-
-
-
-
-
-                    data = data.substring(0, insertIndex) + insertData + data.substring(insertIndex);
                 }
             }
+            // }
+        } catch (e) {
+            console.log(e.stack);
+            throw (e.message);
         }
         var indexUmlEnd;
-        if(data.indexOf("</uml:Package>") != -1){
+        if (data.indexOf("</uml:Package>") != -1) {
             indexUmlEnd = data.indexOf("</uml:Package>") + "</uml:Package>".length;
-        }else if(data.indexOf("</uml:Model>") != -1){
+        } else if (data.indexOf("</uml:Model>") != -1) {
             indexUmlEnd = data.indexOf("</uml:Model>") + "</uml:Model>".length;
-        }else{
+        } else {
             console.warn("Warning :Can not find the tag 'uml:Package' or 'uml:Model' of" + clientFileName + "! Please check out the xml file")
         }
         var openModelProfileData = data.substring(indexUmlEnd);         //openModel_Profile part
         var lineDataArray = openModelProfileData.split("\r\n");
-        for(var i = 0; i < lineDataArray.length;){
-            if(lineDataArray[i].indexOf("PRStereotypes") != -1){
+        for (var i = 0; i < lineDataArray.length;) {
+            if (lineDataArray[i].indexOf("PRStereotypes") != -1) {
                 lineDataArray.splice(i, 1);
-            }else{
+            } else {
                 i++;
             }
         }
         data = data.replace(openModelProfileData, lineDataArray.join("\r\n"));
-    }catch (e){
-        console.log(e.stack);
-        throw (e.message);
-    }
-    fs.writeFileSync("./project/" + clientFileName, data);
-}
+        var insertOpenModeldata = "";
+        if (openmodelAttId && openmodelAttId.length > 0) {
+            for (var j = 0; j < openmodelAttId.length; j++) {
+                var tempData = "\t<OpenModel_Profile:OpenModelAttribute xmi:id=\"" + openmodelAttId[j] + "_Mg" + "\" base_StructuralFeature=\"" + openmodelAttId[j] + "\"/>" + "\r\n";
+                insertOpenModeldata += tempData;
+            }
+        }
+        var indexXmi = data.indexOf("</xmi:XMI>");
+        data = data.substring(0, indexXmi) + insertOpenModeldata + data.substring(indexXmi);
 
+        fs.writeFileSync("./project/" + clientFileName, data);
+    }
+}
 function copyClass(){
     var data = fs.readFileSync("./project/" + clientFileName, {encoding: 'utf8'});
     try{
@@ -989,13 +1041,6 @@ function copyClass(){
             });*/
             console.log("The module of copy class finished.");
         }
-
-
-
-
-        
-
-
 
         fs.writeFileSync("./project/" + clientFileName, data);
     }catch (e){
@@ -1537,6 +1582,11 @@ function createKey(cb){
 
 function parseModule(fileName){                     //XMLREADER read xml files
     var xml = fs.readFileSync("./project/" + fileName, {encoding: 'utf8'});
+    if(xml[xml.indexOf("\n") - 1] != "\r"){       // Line end with "\n" in Linux, we replace all "\n" to "\r\n"
+        //xml = xml.replace(/\n/g,"\r\n");
+        xml = xml.replace(new RegExp('[^\\r]\n'), "\r\n");
+    }
+    fs.writeFileSync("./project/" + fileName, xml);
     xmlreader.read(xml, function(error, model) {
         if (error) {
             console.log('There was a problem reading data from ' + fileName + '. Please check your xmlreader module and nodejs!\t\n' + error.stack);
@@ -3158,13 +3208,22 @@ function parseOpenModelpandr(xmi){              //parse prune and refactor
 
 function parseMerge(xmi){
     var obj = {};
-    if(xmi.attributes().mergeInto || xmi.attributes().mergeInto == ""){
+    /*if(xmi.attributes().mergeInto || xmi.attributes().mergeInto == ""){
         obj.id = xmi.attributes()["base_Element"];
         obj.mergeInto = xmi.attributes().mergeInto;
         obj.fileName = currentFileName;
         obj.childrenId = [];
         merges.push(obj);
+    }*/
+    obj.id = xmi.attributes()["base_Element"];
+    obj.fileName = currentFileName;
+    obj.childrenId = [];
+    if(xmi.attributes().mergeInto && xmi.attributes().mergeInto !== ""){
+        obj.mergeInto = xmi.attributes().mergeInto;
+    }else{
+        obj.mergeInto="";
     }
+    merges.push(obj);
 }
 
 function parseUse(xmi){
@@ -3207,7 +3266,7 @@ function parseAssociation() {
 
 }
 
-function pruningAndRefactoring(realization){
+function pruningAndRefactoring(){
     var client,
         supplier,
         clientFile,
@@ -3242,6 +3301,7 @@ function pruningAndRefactoring(realization){
                     supplier = "";
                     //break;
                 }
+
             }
         }
         if(Class[i].fileName == supplierFileName){
@@ -3258,20 +3318,108 @@ function pruningAndRefactoring(realization){
             }
         }
     }
+    //prunedClass && addedClass
+    client=[];
+    supplier=[];
+    for(var i = 0; i < Class.length; i++){
+                if(Class[i].fileName == clientFileName ) {
+                    client .push(Class[i]);
+                }
+                else if(Class[i].fileName == supplierFileName){
+                    supplier .push(Class[i]);
+                }
+    }
+    //prunedClass
+        for(var i = 0; i < supplier.length; i++){
+          var flag=0;
+          for(var j = 0; j < client.length; j++){
+             if(supplier[i].id==client[j].id){
+                    flag=1;
+        }}
+        if(flag==0){
+            prunedClass.push(supplier[i]);
+        }}
+//addedClass
+    for(var i = 0; i < client.length; i++){
+        var flag=0;
+        for(var j = 0; j < supplier.length; j++){
+            if(supplier[j].id==client[i].id){
+                flag=1;
+            }}
+        if(flag==0){
+            addedClass.push(client[i]);
+        }}
+    client=[];
+    supplier=[];
+//prunedAttribute && attributeCompare && addedAttribute
     for(var i = 0; i < classCompare.length; i++){
         client = classCompare[i].client;
         supplier = classCompare[i].supplier;
         for(var j = 0;j < client.attribute.length; j++){
+            var flag=0;
             for(var k = 0;k < supplier.attribute.length; k++){
                 if(client.attribute[j].id && supplier.attribute[k].id && client.attribute[j].id.substring(0, 23) == supplier.attribute[k].id.substring(0, 23)){
+                    flag=1;
                     client.attribute[j].isInRealization = true;
                     supplier.attribute[k].isInRealization = true;
                     var temp = new AttributeCompare(client.attribute[j], supplier.attribute[k], client, supplier);
                     attributeCompare.push(temp);
                 }
+
+            }
+            }
+            //find prunedAttribute
+            if(client.attribute.length==0){
+            for(var p = 0;p < supplier.attribute.length; p++){
+                var prunedatt;
+                prunedatt = new buildPrunedAtt(supplier.id, supplier.name, supplier.attribute[p].id, supplier.attribute[p].name);
+                prunedAttribute.push(prunedatt);
+            }}else {
+                for (var m = 0; m < supplier.attribute.length; m++) {
+                    var flag = 0;
+                    for (var n = 0; n < client.attribute.length; n++) {
+                        if (client.attribute[n].id && supplier.attribute[m].id && client.attribute[n].id == supplier.attribute[m].id) {
+                            flag = 1;
+                        }
+                    }
+                        if (flag == 0) {
+                            var prunedatt;
+                            prunedatt = new buildPrunedAtt(supplier.id, supplier.name, supplier.attribute[m].id, supplier.attribute[m].name);
+                            prunedAttribute.push(prunedatt);
+                        }
+
+                }
+            }
+        //find addedAttribute
+        if(supplier.attribute.length==0){
+            for(var p = 0;p < client.attribute.length; p++){
+                var addedatt;
+                addedatt = new buildPrunedAtt(client.id, client.name, client.attribute[p].id, client.attribute[p].name);
+                addedAttribute.push(addedatt);
+            }}else {
+            for (var m = 0; m < client.attribute.length; m++) {
+                var flag = 0;
+                for (var n = 0; n < supplier.attribute.length; n++) {
+                    if (supplier.attribute[n].id && client.attribute[m].id && client.attribute[m].id == supplier.attribute[n].id) {
+                        flag = 1;
+                    }
+                }
+                if (flag == 0) {
+                    var addedatt;
+                    addedatt = new buildPrunedAtt(client.id, client.name, client.attribute[m].id, client.attribute[m].name);
+                    addedAttribute.push(addedatt);
+                }
+
             }
         }
+            if(prunedFlag==1){
+                prunedClass=[];
+                prunedAttribute=[];
+                addedClass=[];
+                addedAttribute=[];
+            }
     }
+
     client = "";
     supplier = "";
     for(var i = 0; i < association.length; i++){
@@ -3708,13 +3856,83 @@ function writeUml() {
     }
     log += "\t\t</packagedElement>\r\n";
 
+//write prunedClass
 
-    /*<packagedElement xmi:type="uml:Realization" xmi:id="_oGqm3FLNEeO75dO39GbF8Q_Pr" name="FdContainsFcs">
+    log += "\t<packagedElement xmi:type=\"uml:Package\" xmi:id=\"_FVrMgBwSEeaTcI5su2Ffof\" name=\"prunedClass\">\r\n";
+
+
+    for(var i = 0; i < prunedClass.length; i++){
+        client = prunedClass[i];
+        log += "\t\t\t<packagedElement xmi:type=\"uml:Realization\" xmi:id=\"" + client.id + "_Pr\" name=\"" + client.name +"\" client=\"_FVrMgBwSEeaTcI5su2Faof\">\r\n";
+        log += "\t\t\t\t<ownedComment xmi:type=\"uml:Comment\" xmi:id=\"" + client.id + "_Com" + temp++ + "\" annotatedElement=\"" + client.id + "_Pr\">\r\n";
+        log += "\t\t\t\t\t<body>"+client.name+" is missing." + "</body>\r\n";
+        log += "\t\t\t\t</ownedComment>\r\n";
+        log += "\t\t\t\t<supplier xmi:type=\"uml:Class\" href=\"source.uml#" + client.id + "\"/>\r\n";
+        log += "\t\t\t</packagedElement>\r\n";
+
+    }
+    log += "\t\t<packagedElement xmi:type=\"uml:Class\" xmi:id=\"_FVrMgBwSEeaTcI5su2Faof\" name=\"prunedClass\">\r\n";
+    log += "\t\t<ownedAttribute xmi:type=\"uml:Property\" xmi:id=\"_FVrMgBwSEeaTcI5su2Ffaf\" name=\"prunedAttribute\">\r\n";
+    log += "\t\t</ownedAttribute>\r\n";
+    log += "\t\t</packagedElement>\r\n";
+    log += "\t\t</packagedElement>\r\n";
+   /* <packagedElement xmi:type="uml:Realization" xmi:id="_oGqm3FLNEeO75dO39GbF8Q_Pr" name="FdContainsFcs">
         <client xmi:type="uml:Association" href="target.uml#_oGqm3FLNEeO75dO39GbF8Q"/>
         <supplier xmi:type="uml:Association" href="source.uml#_oGqm3FLNEeO75dO39GbF8Q"/>
     </packagedElement>*/
 
+//write prunedAttribute
+    log += "\t<packagedElement  xmi:type=\"uml:Package\" xmi:id=\"_FVrMgBwSEeaTcI5su2Ffaf_Pk\" name=\"prunedAttribute\">\r\n";
 
+    for(var i = 0; i < prunedAttribute.length; i++){
+
+        log += "\t\t\t<packagedElement xmi:type=\"uml:Realization\" xmi:id=\"" + prunedAttribute[i].attid + "_Pr\" name=\"" + prunedAttribute[i].attname +"\" client=\"_FVrMgBwSEeaTcI5su2Ffaf\">\r\n";
+        log += "\t\t\t\t<ownedComment xmi:type=\"uml:Comment\" xmi:id=\"" + prunedAttribute[i].attid + "_Com" + temp++ + "\" annotatedElement=\"" + prunedAttribute[i].attid + "_Pr\">\r\n";
+        log += "\t\t\t\t\t<body>"+prunedAttribute[i].name+":"+prunedAttribute[i].attname+" is missing." + "</body>\r\n";
+        log += "\t\t\t\t</ownedComment>\r\n";
+         log += "\t\t\t\t<supplier xmi:type=\"uml:Property\" href=\"source.uml#" +prunedAttribute[i].attid + "\"/>\r\n";
+         log += "\t\t\t</packagedElement>\r\n";
+
+    }
+    log += "\t</packagedElement>\r\n";
+
+    //write addedClass
+
+    log += "\t<packagedElement xmi:type=\"uml:Package\" xmi:id=\"_FVrMgBwSEeaTcI5su3Ffof\" name=\"addedClass\">\r\n";
+
+
+    for(var i = 0; i < addedClass.length; i++){
+        client = addedClass[i];
+        log += "\t\t\t<packagedElement xmi:type=\"uml:Realization\" xmi:id=\"" + client.id + "_Pr\" name=\"" + client.name +"\" client=\"_FVrMgBwSEeaTcI5su3Faof\">\r\n";
+        log += "\t\t\t\t<ownedComment xmi:type=\"uml:Comment\" xmi:id=\"" + client.id + "_Com" + temp++ + "\" annotatedElement=\"" + client.id + "_Pr\">\r\n";
+        log += "\t\t\t\t\t<body>"+client.name+" is added." + "</body>\r\n";
+        log += "\t\t\t\t</ownedComment>\r\n";
+        log += "\t\t\t\t<supplier xmi:type=\"uml:Class\" href=\"target.uml#" + client.id + "\"/>\r\n";
+        log += "\t\t\t</packagedElement>\r\n";
+
+    }
+    log += "\t\t<packagedElement xmi:type=\"uml:Class\" xmi:id=\"_FVrMgBwSEeaTcI5su3Faof\" name=\"addedClass\">\r\n";
+    log += "\t\t<ownedAttribute xmi:type=\"uml:Property\" xmi:id=\"_FVrMgBwSEeaTcI5su3Ffaf\" name=\"addedAttribute\">\r\n";
+    log += "\t\t</ownedAttribute>\r\n";
+    log += "\t\t</packagedElement>\r\n";
+    log += "\t\t</packagedElement>\r\n";
+
+    //write addedAttribute
+    log += "\t<packagedElement  xmi:type=\"uml:Package\" xmi:id=\"_FVrMgBwSEeaTcI5su3Ffaf_Pk\" name=\"addedAttribute\">\r\n";
+
+    for(var i = 0; i < addedAttribute.length; i++){
+
+        log += "\t\t\t<packagedElement xmi:type=\"uml:Realization\" xmi:id=\"" + addedAttribute[i].attid + "_Pr\" name=\"" + addedAttribute[i].attname +"\" client=\"_FVrMgBwSEeaTcI5su3Ffaf\">\r\n";
+        log += "\t\t\t\t<ownedComment xmi:type=\"uml:Comment\" xmi:id=\"" + addedAttribute[i].attid + "_Com" + temp++ + "\" annotatedElement=\"" + addedAttribute[i].attid + "_Pr\">\r\n";
+        log += "\t\t\t\t\t<body>"+addedAttribute[i].name+":"+addedAttribute[i].attname+" is added." + "</body>\r\n";
+        log += "\t\t\t\t</ownedComment>\r\n";
+        log += "\t\t\t\t<supplier xmi:type=\"uml:Property\" href=\"target.uml#" +addedAttribute[i].attid + "\"/>\r\n";
+        log += "\t\t\t</packagedElement>\r\n";
+
+    }
+    log += "\t</packagedElement>\r\n";
+
+//write profileApplication
     log += "\t\t<profileApplication xmi:type=\"uml:ProfileApplication\" xmi:id=\"_bty7UB5SEeaHceiWmTzrow\">\r\n";
     log += "\t\t\t<eAnnotations xmi:type=\"ecore:EAnnotation\" xmi:id=\"_cRbM0R5SEeaHceiWmTzrow\" source=\"PapyrusVersion\">\r\n";
     log += "\t\t\t\t<details xmi:type=\"ecore:EStringToStringMapEntry\" xmi:id=\"_cRbM0h5SEeaHceiWmTzrow\" key=\"Version\" value=\"0.2.2\"/>\r\n";
@@ -3742,8 +3960,21 @@ function writeUml() {
     for(var i = 0;i < classWithAssociation.length; i++){
         log += "\t<OpenModel_Profile:PruneAndRefactor xmi:id=\"" + classWithAssociation[i].client.id + "_Pr2\" base_Realization=\"" + classWithAssociation[i].client.id + "_Pr\"/>\r\n";
     }
+    log += "\t<OpenModel_Profile:OpenModelClass xmi:id=\"_FVrMgBwSEeaTcI5su2Faof_Pr2\" base_Class=\"_FVrMgBwSEeaTcI5su2Faof\"/>\r\n";
+    log += "\t<OpenModel_Profile:OpenModelAttribute xmi:id=\"_FVrMgBwSEeaTcI5su2Ffaf_Pr2\" base_StructuralFeature=\"_FVrMgBwSEeaTcI5su2Ffaf\"/>\r\n";
+    for(var i = 0;i < prunedClass.length; i++){
+        log += "\t<OpenModel_Profile:PruneAndRefactor xmi:id=\"" + prunedClass[i].id + "_Pr2\" base_Realization=\"" + prunedClass[i].id + "_Pr\"/>\r\n";
+    }
 
-
+    for(var i = 0;i < prunedAttribute.length; i++){
+        log += "\t<OpenModel_Profile:PruneAndRefactor xmi:id=\"" + prunedAttribute[i].attid + "_Pr2\" base_Realization=\"" + prunedAttribute[i].attid + "_Pr\"/>\r\n";
+    }
+    for(var i = 0;i < addedClass.length; i++){
+        log += "\t<OpenModel_Profile:PruneAndRefactor xmi:id=\"" + addedClass[i].id + "_Pr2\" base_Realization=\"" + addedClass[i].id + "_Pr\"/>\r\n";
+    }
+    for(var i = 0;i < addedAttribute.length; i++){
+        log += "\t<OpenModel_Profile:PruneAndRefactor xmi:id=\"" + addedAttribute[i].attid + "_Pr2\" base_Realization=\"" + addedAttribute[i].attid + "_Pr\"/>\r\n";
+    }
 
     //  <OpenModel_Profile:PruneAndRefactor xmi:id="_4uSigJ1PEeWJ0fWjnLbawA" base_Realization="_7WX0gJ1OEeWJ0fWjnLbawA"/>
 

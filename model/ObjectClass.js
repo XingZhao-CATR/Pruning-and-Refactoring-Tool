@@ -198,8 +198,10 @@ Class.prototype.buildGeneral = function(gen){
     var obj;
     if(gen.attributes().general){
         obj = gen.attributes().general;
-    }else{
+    }else if(gen.general){
         obj = gen.general.attributes().href.split("#")[1];
+    }else{
+        return;
     }
     this.generalization.push(obj);
 };
@@ -262,5 +264,9 @@ Class.prototype.buildOperate = function(para){
     }
     this.attribute.push(parameter);
     return r;
+};
+Class.prototype.buildidatt = function(tempid,tempatt){
+   this.id=tempid;
+   this.attribute=tempatt;
 };
 module.exports = Class;
