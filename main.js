@@ -104,8 +104,8 @@ function main_Entrance(){
                     for(var i = 0; i < files.length; i++) {
                         var allowedFileExtensions = ['xml', 'uml'];
                         var currentFileExtension = files[i].split('.').pop();
-                       // if(allowedFileExtensions.indexOf(currentFileExtension) !== -1 && files[i] != "mapping.uml"&&(files[i]==supplierFileName||files[i]==clientFileName) ) {   //match postfix of files
-                        if(allowedFileExtensions.indexOf(currentFileExtension) !== -1 && files[i] != "mapping.uml" ) {
+                        //if(allowedFileExtensions.indexOf(currentFileExtension) !== -1 && (files[i].toLowerCase()==supplierFileName|| files[i].toLowerCase()==clientFileName) ) {   //match postfix of files
+                        if(allowedFileExtensions.indexOf(currentFileExtension) !== -1 && files[i] != "mapping.uml" && files[i].toLowerCase().indexOf("profile.uml") == -1) {
                                 currentFileName = files[i];
                             fileNum++;
                            /* if(currentFileName != supplierFileName){
@@ -522,7 +522,7 @@ function merge(files) {
                 // source data is the file you will get information. Not supplier file , not client file.
                 var allowedFileExtensions = ['xml', 'uml'];
                 var currentFileExtension = files[i].split('.').pop();
-                if (allowedFileExtensions.indexOf(currentFileExtension) !== -1 && files[i] != "mapping.uml" && files[i].toLowerCase() !== supplierFileName && files[i].toLowerCase() !== clientFileName) {
+                if (allowedFileExtensions.indexOf(currentFileExtension) !== -1 && files[i] != "mapping.uml" && files[i].toLowerCase() !== supplierFileName && files[i].toLowerCase() !== clientFileName&& files[i].toLowerCase().indexOf("profile.uml")==-1 ) {
                     var sourceData = fs.readFileSync("./project/" + files[i], {encoding: 'utf8'});
                     var openmodelAttId = [];
                     for (var j = 0; j < merges.length; j++) {
