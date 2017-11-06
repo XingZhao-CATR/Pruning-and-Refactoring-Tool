@@ -77,6 +77,7 @@ var use = [];
 var file = [];
 var prunedFlag=0;
 
+
 var result = main_Entrance();
 
 function main_Entrance(){
@@ -101,6 +102,7 @@ function main_Entrance(){
                     if(fs.existsSync("./project/CopyAndSplit.txt")){
                         readCopyAndSplit();
                     }
+                    var flag=0;
                     for(var i = 0; i < files.length; i++) {
                         var allowedFileExtensions = ['xml', 'uml'];
                         var currentFileExtension = files[i].split('.').pop();
@@ -113,7 +115,6 @@ function main_Entrance(){
                             }*/
                             parseModule(files[i]);
                         }
-                        var flag=0;
                         if(files[i].toLowerCase() == clientFileName){
                             flag=1;
                         }
@@ -1356,6 +1357,7 @@ function splitClass(){
                                 }
                             }
                             splitClassId.push(splitclassid);
+                            //console.log(splitclassid);
                         }
                     }
                 });
@@ -1586,7 +1588,7 @@ function parseModule(fileName){                     //XMLREADER read xml files
         //xml = xml.replace(/\n/g,"\r\n");
         xml = xml.replace(new RegExp('[^\\r]\n'), "\r\n");
     }
-    fs.writeFileSync("./project/" + fileName, xml);
+    //fs.writeFileSync("./project/" + fileName, xml);
     xmlreader.read(xml, function(error, model) {
         if (error) {
             console.log('There was a problem reading data from ' + fileName + '. Please check your xmlreader module and nodejs!\t\n' + error.stack);
@@ -3278,6 +3280,21 @@ function pruningAndRefactoring(){
         attClientFile,
         attSupplierFile;
 
+
+    /*if(splitClassId==null||splitClassId.length==0){
+        for(var i=0;i<copyAndSplit.splitClass.length;i++){
+            copyAndSplit.splitClass[i] = copyAndSplit.splitClass[i].replace(/^[^A-Za-z0-9|_]+|[^A-Za-z0-9|_\d]+$/g, "");
+            copyAndSplit.splitClass[i] = copyAndSplit.splitClass[i].replace(/[^\w\.-]+/g, '_');
+            for(var j=0;j<Class.length;j++){
+                //console.log(Class[j].id);
+                if(Class[j].fileName==supplierFileName && Class[j].name==copyAndSplit.splitClass[i] ){
+                    splitClassId.push(Class[j].id);
+                }
+            }
+        }
+    }
+    console.log(splitClassId);*/
+
     for(var i = 0; i < Class.length; i++){
         //flag = 0;
         for(var j = i + 1; j < Class.length; j++){
@@ -3304,7 +3321,9 @@ function pruningAndRefactoring(){
 
             }
         }
-        if(Class[i].fileName == supplierFileName){
+
+
+        /*if(Class[i].fileName == supplierFileName){
             for(var j = 0; j < splitClassId.length; j++){
                 if(Class[i].id == splitClassId[j].classId){
                     for(var k = 0; k < association.length; k++){
@@ -3316,18 +3335,18 @@ function pruningAndRefactoring(){
                     break;
                 }
             }
-        }
+        }*/
     }
     //prunedClass && addedClass
     client=[];
     supplier=[];
-    for(var i = 0; i < Class.length; i++){
-                if(Class[i].fileName == clientFileName ) {
-                    client .push(Class[i]);
-                }
-                else if(Class[i].fileName == supplierFileName){
-                    supplier .push(Class[i]);
-                }
+    for (var i = 0; i < Class.length; i++) {
+        if (Class[i].fileName == clientFileName) {
+            client.push(Class[i]);
+        }
+        else if (Class[i].fileName == supplierFileName) {
+            supplier.push(Class[i]);
+        }
     }
     //prunedClass
         for(var i = 0; i < supplier.length; i++){
@@ -3365,9 +3384,8 @@ function pruningAndRefactoring(){
                     var temp = new AttributeCompare(client.attribute[j], supplier.attribute[k], client, supplier);
                     attributeCompare.push(temp);
                 }
-
             }
-            }
+        }
             //find prunedAttribute
             if(client.attribute.length==0){
             for(var p = 0;p < supplier.attribute.length; p++){
@@ -3412,12 +3430,12 @@ function pruningAndRefactoring(){
 
             }
         }
-            if(prunedFlag==1){
+            /*if(prunedFlag==1){
                 prunedClass=[];
                 prunedAttribute=[];
                 addedClass=[];
                 addedAttribute=[];
-            }
+            }*/
     }
 
     client = "";
