@@ -3323,7 +3323,7 @@ function pruningAndRefactoring(){
         }
 
 
-        /*if(Class[i].fileName == supplierFileName){
+        if(Class[i].fileName == supplierFileName){
             for(var j = 0; j < splitClassId.length; j++){
                 if(Class[i].id == splitClassId[j].classId){
                     for(var k = 0; k < association.length; k++){
@@ -3335,7 +3335,7 @@ function pruningAndRefactoring(){
                     break;
                 }
             }
-        }*/
+        }
     }
     //prunedClass && addedClass
     client=[];
