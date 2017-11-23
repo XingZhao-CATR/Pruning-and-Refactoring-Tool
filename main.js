@@ -461,13 +461,14 @@ function clone(){
     }
 }
 
-
 function merge(files) {
+    var files=files;
     var data = fs.readFileSync("./project/" + clientFileName, {encoding: 'utf8'});
     if (merges && merges.length > 0) {
         try {
             for (var i = 0; i < merges.length; i++) {
                 if (merges[i].fileName == supplierFileName && merges[i].mergeInto == "") {
+                    //find the class will be merged into and reorganization it
                     var reg = new RegExp('\\s+<packagedElement xmi:type="uml:Class" xmi:id="' + merges[i].id + '"[\\s\\S]*?</packagedElement>');
                     if (data.match(reg) == null) {
                         console.warn("Warning: There is no class xmi:id= \"" + merges[i].id + "\" in " + clientFileName + ". Please recheck your input file!")
@@ -494,6 +495,7 @@ function merge(files) {
                     }
                     attributeData += "\r\n/>";   //avoid indexOf() = -1
                     var matchData = "";
+                    //childrenID is 'used' attributes
                     for (var j = 0; j < merges[i].childrenId.length; j++) {
                         var reg = new RegExp('\\s+<ownedAttribute xmi:type="uml:Property" xmi:id="' + merges[i].childrenId[j]);
                         if (attributeData.match(reg) == null) {
@@ -523,7 +525,7 @@ function merge(files) {
                 // source data is the file you will get information. Not supplier file , not client file.
                 var allowedFileExtensions = ['xml', 'uml'];
                 var currentFileExtension = files[i].split('.').pop();
-                if (allowedFileExtensions.indexOf(currentFileExtension) !== -1 && files[i] != "mapping.uml" && files[i].toLowerCase() !== supplierFileName && files[i].toLowerCase() !== clientFileName&& files[i].toLowerCase().indexOf("profile.uml")==-1 ) {
+                if (allowedFileExtensions.indexOf(currentFileExtension) !== -1 && files[i] != "mapping.uml" && files[i].toLowerCase() !== clientFileName&& files[i].toLowerCase().indexOf("profile.uml")==-1 ) {
                     var sourceData = fs.readFileSync("./project/" + files[i], {encoding: 'utf8'});
                     var openmodelAttId = [];
                     for (var j = 0; j < merges.length; j++) {
@@ -626,6 +628,7 @@ function merge(files) {
         fs.writeFileSync("./project/" + clientFileName, data);
     }
 }
+
 function copyClass(){
     var data = fs.readFileSync("./project/" + clientFileName, {encoding: 'utf8'});
     try{
@@ -3221,7 +3224,16 @@ function parseMerge(xmi){
     obj.fileName = currentFileName;
     obj.childrenId = [];
     if(xmi.attributes().mergeInto && xmi.attributes().mergeInto !== ""){
-        obj.mergeInto = xmi.attributes().mergeInto;
+        var temp=xmi.attributes().mergeInto;
+        if(temp.indexOf(":")!=-1){
+            var arr=temp.split(":");
+            obj.mergeIntoFile=arr[0];
+            obj.mergeInto=arr[1];
+        }else{
+            obj.mergeIntoFile="";
+            obj.mergeInto=temp;
+        }
+        //obj.mergeInto = xmi.attributes().mergeInto;
     }else{
         obj.mergeInto="";
     }
